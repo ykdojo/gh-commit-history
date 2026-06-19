@@ -550,7 +550,7 @@ function humanSpan(vs,ve){
 function updateSubtitle(){
   const [vs,ve]=visibleRange();
   let vt=0;for(const date in D.daily){if(date>=vs&&date<=ve)vt+=D.daily[date];}
-  document.getElementById('subtitle').textContent=vt.toLocaleString()+' commits over '+humanSpan(vs,ve)+'  ·  '+vs+' → '+ve;
+  document.getElementById('subtitle').textContent=vt.toLocaleString()+' commits  ·  '+vs+' → '+ve+' ('+humanSpan(vs,ve)+')';
 }
 function renderAll(){updateSubtitle();renderTotal();renderRepos();renderTotals();applyZoom();}
 
