@@ -35,7 +35,7 @@ function parseArgs(argv) {
     const a = argv[i];
     if (a === '-h' || a === '--help') opts.help = true;
     else if (a === '--years') opts.years = parseInt(argv[++i], 10);
-    else if (a === '--granularity' || a === '-g') opts.granularity = argv[++i];
+    else if (a === '--granularity' || a === '-g') { opts.granularity = argv[++i]; opts.granularityExplicit = true; }
     else if (a === '--style') opts.style = argv[++i];
     else if (a === '--output' || a === '-o') opts.output = argv[++i];
     else if (a === '--no-open') opts.open = false;
@@ -269,9 +269,9 @@ function saveCache(login, cache) {
 // ---------------------------------------------------------------------------
 // HTML rendering (aggregation happens client-side so the granularity toggle is live)
 // ---------------------------------------------------------------------------
-function renderHTML({ login, daily, repoDaily, defaultGranularity, style, total, rangeStart, rangeEnd }) {
+function renderHTML({ login, daily, repoDaily, defaultGranularity, autoGranularity, style, total, rangeStart, rangeEnd }) {
   const colors = STYLES[style] || STYLES.blue;
-  const payload = { login, daily, repoDaily, defaultGranularity, accent: colors.accent, total, rangeStart, rangeEnd };
+  const payload = { login, daily, repoDaily, defaultGranularity, autoGranularity, accent: colors.accent, total, rangeStart, rangeEnd };
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${login} commit history</title>
@@ -399,11 +399,11 @@ function visibleRange(){
   if(currentRange==='custom')return customRange;
   return pastRange(currentRange);
 }
-// Pick a sensible granularity for the visible span: daily for short ranges, weekly for up to ~3 years, else monthly.
+// Pick a sensible granularity for the visible span: daily up to ~3 months, weekly up to ~3 years, else monthly.
 function autoGran(){
   const [vs,ve]=visibleRange();
   const days=(new Date(ve)-new Date(vs))/864e5;
-  return days<=45?'daily':days<=1100?'weekly':'monthly';
+  return days<=100?'daily':days<=1100?'weekly':'monthly';
 }
 function applyRangeChange(){
   g=autoGran();
@@ -415,7 +415,8 @@ function baseLayout(yTitle){
   return {paper_bgcolor:'#0d1117',plot_bgcolor:'#0d1117',font:{color:'#c9d1d9'},
     xaxis:{gridcolor:'#21262d',type:'date'},
     yaxis:{title:yTitle,gridcolor:'#21262d',rangemode:'tozero'},
-    bargap:0.15,shapes:yearBands(),margin:{t:36,r:20,b:36,l:55}};
+    bargap:0.15,shapes:yearBands(),margin:{t:36,r:20,b:36,l:55},
+    hoverlabel:{bgcolor:'#161b22',bordercolor:'#30363d',font:{color:'#e6edf3',size:12}}};
 }
 
 // Per-bucket top-5 repos, for the total chart's hover breakdown
@@ -488,7 +489,7 @@ function renderRepos(){
   const layout=baseLayout('commits '+granLabel[g]);
   layout.barmode='stack';
   layout.hovermode='closest'; // unified would force stack order; closest lets us show our own sorted tooltip
-  layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12}};
+  layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}};
   layout.title={text:'By repository - top '+topN+' '+granLabel[g]+' ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=false; // membership varies per bucket; the hover names each segment, overall chart is the color key
   layout.margin.r=30;
@@ -522,7 +523,8 @@ function renderTotals(){
   const layout={paper_bgcolor:'#0d1117',plot_bgcolor:'#0d1117',font:{color:'#c9d1d9'},
     title:{text:'Overall breakdown by repository ('+vs+' to '+ve+')',font:{size:15},x:0,xanchor:'left'},
     xaxis:{title:'commits',gridcolor:'#21262d',rangemode:'tozero'},yaxis:{automargin:true,ticksuffix:'  '},
-    margin:{t:40,r:60,b:40,l:10},height:Math.max(240,items.length*26+100),showlegend:false};
+    margin:{t:40,r:60,b:40,l:10},height:Math.max(240,items.length*26+100),showlegend:false,
+    hoverlabel:{align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{color:'#e6edf3',size:12}}};
   Plotly.react('repo-totals-chart',[trace],layout,cfg);
 }
 
@@ -567,13 +569,7 @@ if(defaultPast)pastSelect.value=defaultPast;
 startInput.min=endInput.min=D.rangeStart;startInput.max=endInput.max=D.rangeEnd;
 startInput.value=D.rangeStart;endInput.value=D.rangeEnd;
 
-// Default view: past 2 years (fall back to all time for younger accounts)
-if(spanMs>=2*365*864e5){
-  currentRange='2y';
-  rangeMode.value='past';
-  pastSelect.value='2y';
-  pastSelect.style.display='inline-block';
-}
+// Default view: all time (currentRange already 'all', rangeMode already shows it).
 
 rangeMode.addEventListener('change',function(){
   pastSelect.style.display=this.value==='past'?'inline-block':'none';
@@ -588,8 +584,9 @@ pastSelect.addEventListener('change',function(){currentRange=this.value;applyRan
   if(startInput.value&&endInput.value){customRange=[startInput.value,endInput.value];currentRange='custom';applyRangeChange();}
 }));
 
-document.querySelector('#controls button[data-g="'+g+'"]').classList.add('active');
 topN=Math.max(1,parseInt(document.getElementById('topn').value)||20); // sync with input in case the browser restored a value
+if(D.autoGranularity)g=autoGran(); // match the default range's span unless -g was given
+document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x.dataset.g===g));
 renderAll();
 </script></body></html>`;
 }
@@ -671,7 +668,7 @@ function main() {
   const total = Object.values(daily).reduce((a, b) => a + b, 0);
   console.log(`  ${privateRepos.size} private repo(s) ${opts.includePrivate ? 'included' : 'excluded'}.`);
 
-  const html = renderHTML({ login, daily, repoDaily, defaultGranularity: opts.granularity, style: opts.style, total, rangeStart, rangeEnd });
+  const html = renderHTML({ login, daily, repoDaily, defaultGranularity: opts.granularity, autoGranularity: !opts.granularityExplicit, style: opts.style, total, rangeStart, rangeEnd });
   const outFile = path.resolve(opts.output || 'commit-history.html');
   fs.writeFileSync(outFile, html);
   console.log(`\n${total.toLocaleString()} commits from ${rangeStart} to ${rangeEnd}. Wrote ${outFile}`);
