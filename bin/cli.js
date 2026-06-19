@@ -528,7 +528,7 @@ function renderRepos(){
   layout.barmode='stack';
   layout.hovermode='closest'; // unified would force stack order; closest lets us show our own sorted tooltip
   layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}};
-  layout.title={text:'By repository '+(totalRepos>order.length?'(top '+order.length+' of '+totalRepos+')':'('+totalRepos+' repos)'),font:{size:15},x:0,xanchor:'left'};
+  layout.title={text:'By repository '+(totalRepos>order.length?'('+totalRepos+' repos, top '+order.length+' + other)':'('+totalRepos+' repos)'),font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=true;
   layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30,x:1.0,xanchor:'left'}; // right-side, flush to the plot, scrolls when long
   layout.margin.r=125;
