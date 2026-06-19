@@ -298,7 +298,7 @@ function renderHTML({ login, daily, repoDaily, defaultGranularity, autoGranulari
 </style>
 </head><body>
 <div class="container">
-  <h1>${login} - commit history</h1>
+  <h1>${login}'s commit history</h1>
   <div class="subtitle" id="subtitle">${total.toLocaleString()} commits · ${rangeStart} to ${rangeEnd}</div>
   <div id="controls">
     <span class="label">Granularity:</span>
@@ -535,10 +535,22 @@ function applyZoom(){
   Plotly.relayout('chart',r);Plotly.relayout('repo-chart',r);
 }
 
+// Calendar-accurate span as "Y years, M months" (or months/days for short ranges); shows the two largest non-zero units.
+function humanSpan(vs,ve){
+  const a=new Date(vs+'T00:00:00Z'),b=new Date(ve+'T00:00:00Z');
+  let y=b.getUTCFullYear()-a.getUTCFullYear(),m=b.getUTCMonth()-a.getUTCMonth(),d=b.getUTCDate()-a.getUTCDate();
+  if(d<0){m--;d+=new Date(Date.UTC(b.getUTCFullYear(),b.getUTCMonth(),0)).getUTCDate();}
+  if(m<0){y--;m+=12;}
+  const u=[];
+  if(y)u.push(y+(y===1?' year':' years'));
+  if(m)u.push(m+(m===1?' month':' months'));
+  if(d)u.push(d+(d===1?' day':' days'));
+  return u.slice(0,2).join(', ')||'0 days';
+}
 function updateSubtitle(){
   const [vs,ve]=visibleRange();
   let vt=0;for(const date in D.daily){if(date>=vs&&date<=ve)vt+=D.daily[date];}
-  document.getElementById('subtitle').textContent=vt.toLocaleString()+' commits · '+vs+' to '+ve;
+  document.getElementById('subtitle').textContent=vt.toLocaleString()+' commits over '+humanSpan(vs,ve)+'  ·  '+vs+' → '+ve;
 }
 function renderAll(){updateSubtitle();renderTotal();renderRepos();renderTotals();applyZoom();}
 
