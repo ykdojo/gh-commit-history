@@ -394,6 +394,8 @@ function shortRepo(r){return r.indexOf(D.login+'/')===0?r.slice(D.login.length+1
 // Legend label: middle-truncate so the legend stays narrow but keeps the start AND the
 // (usually more distinctive) end of the name. Full name is always in the hover.
 function legendLabel(r){const s=shortRepo(r);return s.length>16?s.slice(0,8)+'…'+s.slice(-7):s;}
+// Colored square for hover tooltips, matching the legend swatch (Plotly renders span color).
+function swatch(c){return '<span style="color:'+c+'">■</span> ';}
 
 // Privacy view: shown (default) | anon (merge private repos into one "private") | hidden (drop them).
 // RD/DAILY are the active datasets all the charts read; syncActive() rebuilds them for the current mode.
@@ -502,14 +504,15 @@ function renderRepos(){
     if(!entries.length)return;
     const top=entries.filter(e=>topSet.has(e[0])), rest=entries.filter(e=>!topSet.has(e[0]));
     top.forEach(e=>{namedY[e[0]][i]=e[1];});
-    // Tooltip for named segments: this period's repos, sorted by commits (descending).
-    const lines=top.map(e=>'&nbsp;&nbsp;'+e[0]+': '+e[1]);
-    if(rest.length){const rt=rest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;other: '+rt+' ('+rest.length+(rest.length===1?' repo)':' repos)'));}
+    // Tooltip for named segments: this period's repos, sorted by commits (descending),
+    // each with a colored swatch matching its legend/segment color.
+    const lines=top.map(e=>'&nbsp;&nbsp;'+swatch(colorByRepo[e[0]]||OTHER_COLOR)+e[0]+': '+e[1]);
+    if(rest.length){const rt=rest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;'+swatch(OTHER_COLOR)+'other: '+rt+' ('+rest.length+(rest.length===1?' repo)':' repos)'));}
     bucketHover[i]='<b>'+x[i]+'</b><br>'+lines.join('<br>');
     if(rest.length){
       const tot=rest.reduce((s,e)=>s+e[1],0);
       otherY[i]=tot;
-      const shown=rest.slice(0,10).map(e=>'&nbsp;&nbsp;'+e[0]+': '+e[1]).join('<br>');
+      const shown=rest.slice(0,10).map(e=>'&nbsp;&nbsp;'+swatch(OTHER_COLOR)+e[0]+': '+e[1]).join('<br>');
       let txt='<b>'+x[i]+' - other</b>: '+tot+' commits ('+rest.length+(rest.length===1?' repo)':' repos)')+'<br>'+shown;
       const more=rest.slice(10);
       if(more.length){const mt=more.reduce((s,e)=>s+e[1],0);txt+='<br>&nbsp;&nbsp;...and '+more.length+' more ('+mt+')';}
