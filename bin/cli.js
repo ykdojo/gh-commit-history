@@ -507,9 +507,11 @@ function renderRepos(){
     entries.forEach(e=>{if(topSet.has(e[0]))namedY[e[0]][i]=e[1];});
     const overflow=entries.filter(e=>!topSet.has(e[0]));
     if(overflow.length)otherY[i]=overflow.reduce((s,e)=>s+e[1],0);
-    // Tooltip: THIS period's own top-N repos by name - even ones that land in the overall
+    // Tooltip: THIS period's own top repos by name - even ones that land in the overall
     // "other" bucket (shown with the other color but their real name) - then the remaining tail.
-    const hTop=entries.slice(0,topN), hRest=entries.slice(topN);
+    // Capped at 10 regardless of the bar's top-N, so the tooltip stays compact.
+    const HOVER_N=10;
+    const hTop=entries.slice(0,HOVER_N), hRest=entries.slice(HOVER_N);
     const lines=hTop.map(e=>'&nbsp;&nbsp;'+swatch(topSet.has(e[0])?(colorByRepo[e[0]]||OTHER_COLOR):OTHER_COLOR)+e[0]+': '+e[1]);
     if(hRest.length){const rt=hRest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;'+swatch(OTHER_COLOR)+'other: '+rt+' ('+hRest.length+(hRest.length===1?' repo)':' repos)'));}
     bucketHover[i]='<b>'+x[i]+'</b><br>'+lines.join('<br>');
