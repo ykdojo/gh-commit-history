@@ -29,6 +29,7 @@ npx gh-commit-history [username] [options]
 | `-g, --granularity <g>` | `daily`, `weekly` (default), or `monthly` |
 | `--style <name>` | `blue` (default), `green`, or `purple` |
 | `-o, --output <path>` | Output file path (default: `commit-history.html`) |
+| `--exclude-private` | Exclude private repositories (private are included by default) |
 | `--no-open` | Don't auto-open the browser |
 | `--no-cache` | Skip cache and fetch fresh data |
 | `-h, --help` | Show help |
@@ -62,12 +63,14 @@ The generated page has three linked charts plus shared controls (granularity, ra
 
 ## How it works
 
-1. Fetches commit counts via GitHub's GraphQL `contributionsCollection` API, one request per calendar quarter. A quarter has at most 92 days, so a single page of 100 nodes always captures every commit-day with no pagination - and summing the per-day, per-repo counts exactly matches GitHub's `totalCommitContributions`.
-2. Caches each completed quarter to `~/.gh-commit-history/<user>.json`. Only the current quarter is refetched on subsequent runs.
-3. Embeds the daily, per-repo series in a self-contained HTML file with an interactive [Plotly.js](https://plotly.com/javascript/) chart (loaded from CDN), and opens it in your browser. All aggregation and re-ranking happen client-side, so the controls are instant.
+1. Fetches your commits via GitHub's commit **search API** (`author:<you>`), one date window per calendar quarter. Any window with more than 1000 results (the API's cap) is recursively split by date, so every commit is captured. Unlike the `contributionsCollection` API, search includes **private** repositories.
+2. De-dupes by commit SHA: the same commit copied into someone's fork shares its SHA, so only the canonical copy (a repo you own, else a non-fork) is kept. Forks that merely mirror your commits disappear; a fork where you authored *unique* commits keeps those.
+3. Caches each completed quarter to `~/.gh-commit-history/<user>.json`. Only the current quarter is refetched on subsequent runs.
+4. Embeds the per-repo daily series in a self-contained HTML file with an interactive [Plotly.js](https://plotly.com/javascript/) chart (loaded from CDN), and opens it in your browser. All aggregation, ranking, and range filtering happen client-side, so the controls are instant.
 
 ## Notes
 
-- "Commits" means commit contributions as GitHub counts them: commits attributed to your account (via a linked email) on repositories' default branches.
-- Counts reflect **public** commits. GitHub's API does not itemize private-repository commits by repo (they're aggregated into a restricted count), so private work is not shown.
-- If a single repo had commits on more than 100 distinct days within one quarter, counts could be slightly under-reported; the tool warns when this happens (rare).
+- "Commits" means commits **authored by you** (matched on your linked email) on repositories' default branches, across every repo your `gh` login can see - including private ones.
+- **Private repos are included by default** (use `--exclude-private` to omit them). This only works for your own account - you can't read other users' private repos.
+- The search API is rate-limited (30 requests/min) and capped at 1000 results per query, so the **first full-history fetch takes a few minutes**. It's cached afterward, so later runs are fast.
+- In the very rare case of a single day with more than 1000 commits, counts could be slightly under-reported; the tool warns when this happens.

@@ -114,6 +114,11 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.ceil(ms));
 }
 
+// Live progress line (rewritten in place) so long rate-limit waits don't look frozen.
+let progressLabel = '';
+function progress(msg) { if (progressLabel) process.stdout.write(`\r  ${progressLabel}: ${msg}\x1b[K`); }
+function rateLimitWait() { for (let s = 60; s > 0; s--) { progress(`rate limited - resuming in ${s}s`); sleepSync(1000); } }
+
 // The search API's *secondary* rate limit punishes bursts, so we space every
 // request ~3s apart and back off 60s on a 403 instead of failing.
 let lastSearch = 0;
@@ -132,14 +137,14 @@ function searchPage(login, from, to, page) {
       ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
       const json = JSON.parse(raw);
       if (json.message && json.total_count === undefined) {
-        if (/rate limit/i.test(json.message)) { process.stdout.write('(rate limited, waiting 60s) '); sleepSync(60000); continue; }
+        if (/rate limit/i.test(json.message)) { rateLimitWait(); continue; }
         fail(`Search API error: ${json.message}`);
       }
       return json;
     } catch (e) {
       if (e.code === 'ENOENT') fail('GitHub CLI (gh) not found. Install from https://cli.github.com/ and run `gh auth login`.');
       const msg = (e.stderr || '').toString() || e.message || '';
-      if (/rate limit/i.test(msg) || /HTTP 403/.test(msg)) { process.stdout.write('(rate limited, waiting 60s) '); sleepSync(60000); continue; }
+      if (/rate limit/i.test(msg) || /HTTP 403/.test(msg)) { rateLimitWait(); continue; }
       fail(`gh command failed: ${msg}`);
     }
   }
@@ -152,21 +157,24 @@ function midDate(from, to) {
   return ymd(new Date(a + Math.floor((b - a) / 2)));
 }
 
-// Returns { perRepo: {repo: {date: count}}, privateRepos: Set, total, truncated }
+// Returns { commits: [{repo, date, owner, fork, priv}], truncated }
+// SHA-deduped (canonical copy kept) but not otherwise filtered, so main() can
+// re-aggregate under different filters without refetching.
 function fetchWindow(login, fromISO, toISO) {
   const from = fromISO.slice(0, 10), to = toISO.slice(0, 10);
-  const perRepo = {};
-  const privateRepos = new Set();
-  let total = 0, truncated = false;
+  const raw = []; // { sha, repo, date, fork, owner, priv }
+  let truncated = false;
 
   function collect(items) {
     for (const it of items) {
-      const repo = it.repository.full_name;
-      const date = it.commit.author.date.slice(0, 10);
-      (perRepo[repo] = perRepo[repo] || {});
-      perRepo[repo][date] = (perRepo[repo][date] || 0) + 1;
-      if (it.repository.private) privateRepos.add(repo);
-      total++;
+      raw.push({
+        sha: it.sha,
+        repo: it.repository.full_name,
+        date: it.commit.author.date.slice(0, 10),
+        fork: !!it.repository.fork,
+        owner: (it.repository.owner && it.repository.owner.login) || '',
+        priv: !!it.repository.private,
+      });
     }
   }
 
@@ -182,12 +190,23 @@ function fetchWindow(login, fromISO, toISO) {
       return;
     }
     collect(first.items);
+    progress(`${raw.length} commits...`);
     const pages = Math.ceil(count / 100);
-    for (let p = 2; p <= pages; p++) collect(searchPage(login, f, t, p).items);
+    for (let p = 2; p <= pages; p++) { collect(searchPage(login, f, t, p).items); progress(`${raw.length} commits...`); }
   }
 
   range(from, to);
-  return { perRepo, privateRepos: [...privateRepos], total, truncated };
+
+  // The same commit appears in every fork (same SHA). Keep one canonical copy -
+  // prefer a repo the user owns, then a non-fork. A fork that merely copies your
+  // commits collapses into the canonical repo and disappears; a fork where you
+  // authored *unique* commits keeps those (their SHAs exist nowhere else).
+  const score = (it) => (it.owner === login ? 2 : 0) + (it.fork ? 0 : 1);
+  const bySha = new Map();
+  for (const it of raw) { const cur = bySha.get(it.sha); if (!cur || score(it) > score(cur)) bySha.set(it.sha, it); }
+
+  const commits = [...bySha.values()].map((it) => ({ repo: it.repo, date: it.date, owner: it.owner, fork: it.fork, priv: it.priv }));
+  return { commits, truncated };
 }
 
 // ---------------------------------------------------------------------------
@@ -587,23 +606,28 @@ function main() {
   const privateRepos = new Set();
   let anyTruncated = false;
 
+  if (windows.some((w) => !cache.windows[w.key] || w.isCurrent || !opts.cache)) {
+    console.log('  (Uses the rate-limited commit search API, so this can take a few minutes the first time. Progress is cached per quarter - safe to stop and resume.)');
+  }
+
   for (const w of windows) {
     let res = cache.windows[w.key];
     const needFetch = !res || w.isCurrent || !opts.cache;
     if (needFetch) {
-      process.stdout.write(`  ${w.key}... `);
+      progressLabel = w.key;
+      progress('fetching...');
       res = fetchWindow(login, w.from, w.to);
       cache.windows[w.key] = res;
-      console.log(`${res.total} commits`);
+      process.stdout.write(`\r  ${w.key}: ${res.commits.length} commits\x1b[K\n`);
+      progressLabel = '';
       if (opts.cache) saveCache(login, cache); // save incrementally; the search fetch is slow (rate-limited)
     } else {
-      console.log(`  ${w.key}... ${res.total} commits (cached)`);
+      console.log(`  ${w.key}: ${res.commits.length} commits (cached)`);
     }
-    (res.privateRepos || []).forEach((r) => privateRepos.add(r));
-    for (const [repo, obj] of Object.entries(res.perRepo)) {
-      if (!opts.includePrivate && privateRepos.has(repo)) continue;
-      allRepoDaily[repo] = allRepoDaily[repo] || {};
-      for (const [date, n] of Object.entries(obj)) allRepoDaily[repo][date] = (allRepoDaily[repo][date] || 0) + n;
+    for (const c of res.commits) {
+      if (c.priv) privateRepos.add(c.repo);
+      allRepoDaily[c.repo] = allRepoDaily[c.repo] || {};
+      allRepoDaily[c.repo][c.date] = (allRepoDaily[c.repo][c.date] || 0) + 1;
     }
     if (res.truncated) anyTruncated = true;
   }
