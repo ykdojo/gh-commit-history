@@ -487,17 +487,21 @@ function renderRepos(){
     for(const date in rd){if(date<vs||date>ve)continue;const i=b.idx[keyFor(date,g)];perBucket[i][repo]=(perBucket[i][repo]||0)+rd[date];}
   }
 
-  // Rank PER BUCKET: each bucket shows its own top-N repos; the rest of that bucket -> other.
-  // This way a repo can never hide in "other" while being a bucket's top contributor.
-  const named=new Set();
-  const namedY={}, otherY=new Array(x.length).fill(null), otherText=new Array(x.length).fill(null);
+  // Use the SAME top-N as the overall breakdown: rank over the whole visible range,
+  // show those repos individually, and lump every other repo into "other" per bucket.
+  // (Ranking per-bucket instead would make the legend a huge union and disagree with
+  //  the overall chart on whether "other" exists.)
+  const ranked=rankRepos(vs,ve);
+  const order=ranked.slice(0,topN).map(e=>e.repo); // largest first, matches overall chart
+  const topSet=new Set(order), totalRepos=ranked.length;
+  const namedY={}; order.forEach(r=>{namedY[r]=new Array(x.length).fill(null);});
+  const otherY=new Array(x.length).fill(null), otherText=new Array(x.length).fill(null);
   const bucketHover=new Array(x.length).fill(null); // full breakdown for a bucket, sorted by that bucket's counts
-  const ensure=r=>{if(!namedY[r]){namedY[r]=new Array(x.length).fill(null);named.add(r);}};
   perBucket.forEach((m,i)=>{
     const entries=Object.entries(m).sort((a,c)=>c[1]-a[1]); // sorted desc by THIS bucket's counts
     if(!entries.length)return;
-    const top=entries.slice(0,topN), rest=entries.slice(topN);
-    top.forEach(e=>{ensure(e[0]);namedY[e[0]][i]=e[1];});
+    const top=entries.filter(e=>topSet.has(e[0])), rest=entries.filter(e=>!topSet.has(e[0]));
+    top.forEach(e=>{namedY[e[0]][i]=e[1];});
     // Tooltip for named segments: this period's repos, sorted by commits (descending).
     const lines=top.map(e=>'&nbsp;&nbsp;'+e[0]+': '+e[1]);
     if(rest.length){const rt=rest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;other: '+rt+' ('+rest.length+(rest.length===1?' repo)':' repos)'));}
@@ -513,10 +517,6 @@ function renderRepos(){
     }
   });
 
-  // Order named repos by commits in the visible range (largest first), so the legend
-  // matches the overall-breakdown chart's order. Colors are stable (keyed separately).
-  const namedTotal={};named.forEach(r=>{namedTotal[r]=namedY[r].reduce((s,v)=>s+(v||0),0);});
-  const order=[...named].sort((a,c)=>namedTotal[c]-namedTotal[a]);
   const display=order.concat(otherY.some(v=>v!=null)?['other']:[]);
   // largest at bottom: add in reverse display order. Named segments share the
   // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
@@ -528,7 +528,7 @@ function renderRepos(){
   layout.barmode='stack';
   layout.hovermode='closest'; // unified would force stack order; closest lets us show our own sorted tooltip
   layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}};
-  layout.title={text:'By repository ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
+  layout.title={text:'By repository '+(totalRepos>order.length?'(top '+order.length+' of '+totalRepos+')':'('+totalRepos+' repos)'),font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=true;
   layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30,x:1.0,xanchor:'left'}; // right-side, flush to the plot, scrolls when long
   layout.margin.r=125;
