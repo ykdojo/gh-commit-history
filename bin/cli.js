@@ -401,11 +401,11 @@ function visibleRange(){
   if(currentRange==='custom')return customRange;
   return pastRange(currentRange);
 }
-// Pick a sensible granularity for the visible span: daily up to ~3 months, weekly up to ~3 years, else monthly.
+// Pick a sensible granularity for the visible span: daily up to ~3 months, weekly up to ~4.5 years, else monthly.
 function autoGran(){
   const [vs,ve]=visibleRange();
   const days=(new Date(ve)-new Date(vs))/864e5;
-  return days<=100?'daily':days<=1100?'weekly':'monthly';
+  return days<=100?'daily':days<=1642?'weekly':'monthly';
 }
 function applyRangeChange(){
   g=autoGran();
@@ -492,9 +492,10 @@ function renderRepos(){
   layout.barmode='stack';
   layout.hovermode='closest'; // unified would force stack order; closest lets us show our own sorted tooltip
   layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}};
-  layout.title={text:'By repository - top '+topN+' '+granLabel[g]+' ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
-  layout.showlegend=false; // membership varies per bucket; the hover names each segment, overall chart is the color key
-  layout.margin.r=30;
+  layout.title={text:'By repository ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
+  layout.showlegend=true;
+  layout.legend={font:{size:11},traceorder:'reversed',bgcolor:'transparent'}; // right-side, scrolls when long
+  layout.margin.r=210;
   Plotly.react('repo-chart',traces,layout,cfg);
 }
 
@@ -579,6 +580,8 @@ pastSelect.querySelectorAll('option').forEach(opt=>{
   if(ms>spanMs*1.02)opt.style.display='none';
   else if(ms>defMs){defMs=ms;defaultPast=opt.value;}
 });
+// Prefer 2 years as the default when there's enough history; else the longest visible range.
+if(spanMs>=PERIOD_MS['2y']*864e5)defaultPast='2y';
 if(defaultPast)pastSelect.value=defaultPast;
 startInput.min=endInput.min=D.rangeStart;startInput.max=endInput.max=D.rangeEnd;
 startInput.value=D.rangeStart;endInput.value=D.rangeEnd;
