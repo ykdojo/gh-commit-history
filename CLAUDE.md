@@ -1,0 +1,14 @@
+# gh-commit-history
+
+Visualize a GitHub user's commit history (all years, daily/weekly/monthly, per-repo breakdown). Self-contained HTML + Plotly, powered by the `gh` CLI. Data comes from the commit search API (includes private repos), SHA-deduped so forks don't double-count. Published on npm as `gh-commit-history`.
+
+## Planned / next steps (review before sharing widely)
+
+- **Opt-in prompt before a long first fetch.** The full-history fetch uses the rate-limited commit search API and can take ~10-15 min on the first run (cached per quarter afterward, so later runs are fast). When little is cached yet and the requested span is large, prompt the user yes/no first - make clear it may take a while, and offer to limit the range (e.g. `--years`) to significantly cut the time. Cutoff is TBD: maybe "more than ~1 year of uncached history", or based on the number of quarters that need fetching. Decide during review.
+- **Thorough testing, mostly automated**, before publishing more widely / sharing.
+- Then publish/share.
+
+## Notes
+
+- Verify commit counts by cross-checking a repo against the REST `/repos/{repo}/commits?author=<login>` endpoint (different API than search); per-repo counts matched exactly for public and private repos.
+- Generated `commit-history.html` and the cache (`~/.gh-commit-history/`) are not committed (gitignored / outside the repo).
