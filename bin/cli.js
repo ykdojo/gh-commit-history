@@ -269,9 +269,9 @@ function saveCache(login, cache) {
 // ---------------------------------------------------------------------------
 // HTML rendering (aggregation happens client-side so the granularity toggle is live)
 // ---------------------------------------------------------------------------
-function renderHTML({ login, daily, repoDaily, defaultGranularity, autoGranularity, style, total, rangeStart, rangeEnd }) {
+function renderHTML({ login, daily, repoDaily, privateRepos, defaultGranularity, autoGranularity, style, total, rangeStart, rangeEnd }) {
   const colors = STYLES[style] || STYLES.blue;
-  const payload = { login, daily, repoDaily, defaultGranularity, autoGranularity, accent: colors.accent, total, rangeStart, rangeEnd };
+  const payload = { login, daily, repoDaily, privateRepos: privateRepos || [], defaultGranularity, autoGranularity, accent: colors.accent, total, rangeStart, rangeEnd };
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${login} commit history</title>
@@ -331,6 +331,12 @@ function renderHTML({ login, daily, repoDaily, defaultGranularity, autoGranulari
     </span>
     <span class="label">Top repos:</span>
     <input type="number" id="topn" min="1" value="20" autocomplete="off">
+    <span class="label" id="privacy-label">Private repos:</span>
+    <select id="privacy">
+      <option value="shown">Shown</option>
+      <option value="anon">Anonymized</option>
+      <option value="hidden">Hidden</option>
+    </select>
   </div>
   <div id="chart" class="chart"></div>
   <div id="repo-chart" class="chart"></div>
@@ -369,17 +375,40 @@ function seriesFor(dateMap,g){
 }
 
 // Rank repos by commits within [vs,ve]
-function rankRepos(vs,ve){
-  return Object.keys(D.repoDaily).map(repo=>{
-    const rd=D.repoDaily[repo];let t=0;
+function rankRepos(vs,ve,data){
+  data=data||RD;
+  return Object.keys(data).map(repo=>{
+    const rd=data[repo];let t=0;
     for(const date in rd){if(date>=vs&&date<=ve)t+=rd[date];}
     return {repo,t};
   }).filter(x=>x.t>0).sort((a,b)=>b.t-a.t);
 }
 
 // Stable colors by all-time rank
-const colorByRepo={Other:OTHER_COLOR},allRankIndex={};
-rankRepos(D.rangeStart,D.rangeEnd).forEach((x,i)=>{colorByRepo[x.repo]=PALETTE[i%PALETTE.length];allRankIndex[x.repo]=i;});
+const colorByRepo={Other:OTHER_COLOR,private:'#a371f7'},allRankIndex={};
+rankRepos(D.rangeStart,D.rangeEnd,D.repoDaily).forEach((x,i)=>{colorByRepo[x.repo]=PALETTE[i%PALETTE.length];allRankIndex[x.repo]=i;});
+// Compact legend label: drop the user's own "login/" prefix (still unique among their repos); keep owner for others.
+function shortRepo(r){return r.indexOf(D.login+'/')===0?r.slice(D.login.length+1):r;}
+
+// Privacy view: shown (default) | anon (merge private repos into one "private") | hidden (drop them).
+// RD/DAILY are the active datasets all the charts read; syncActive() rebuilds them for the current mode.
+const PRIVATE=new Set(D.privateRepos||[]);
+let privacyMode='shown', RD=D.repoDaily, DAILY=D.daily;
+function syncActive(){
+  if(privacyMode==='shown'){RD=D.repoDaily;DAILY=D.daily;return;}
+  const rd={};let merged=null;
+  for(const repo in D.repoDaily){
+    if(PRIVATE.has(repo)){
+      if(privacyMode==='hidden')continue;
+      merged=merged||{};const o=D.repoDaily[repo];for(const d in o)merged[d]=(merged[d]||0)+o[d];
+      continue;
+    }
+    rd[repo]=D.repoDaily[repo];
+  }
+  if(merged)rd['private']=merged;
+  const daily={};for(const repo in rd){const o=rd[repo];for(const d in o)daily[d]=(daily[d]||0)+o[d];}
+  RD=rd;DAILY=daily;
+}
 
 function yearBands(){
   const ys={};ALL_DATES.forEach(d=>{ys[d.slice(0,4)]=1;});
@@ -424,15 +453,15 @@ function baseLayout(yTitle){
 // Per-bucket top-5 repos, for the total chart's hover breakdown
 function topReposPerBucket(g){
   const b=buckets(g),acc=b.order.map(()=>({}));
-  for(const repo in D.repoDaily){
-    const rd=D.repoDaily[repo];
+  for(const repo in RD){
+    const rd=RD[repo];
     for(const date in rd){if(date<D.rangeStart||date>D.rangeEnd)continue;const i=b.idx[keyFor(date,g)];acc[i][repo]=(acc[i][repo]||0)+rd[date];}
   }
   return acc.map(m=>Object.entries(m).sort((a,b)=>b[1]-a[1]).slice(0,5));
 }
 
 function renderTotal(){
-  const x=buckets(g).order,y=seriesFor(D.daily,g),tops=topReposPerBucket(g);
+  const x=buckets(g).order,y=seriesFor(DAILY,g),tops=topReposPerBucket(g);
   const text=x.map((k,i)=>{
     const lines=tops[i].map(e=>'&nbsp;&nbsp;'+e[0]+': '+e[1]).join('<br>');
     return '<b>'+k+'</b><br>'+y[i]+' commits'+(tops[i].length?'<br>Top repos:<br>'+lines:'');
@@ -448,8 +477,8 @@ function renderRepos(){
 
   // Per-bucket repo counts within the visible range.
   const perBucket=x.map(()=>({}));
-  for(const repo in D.repoDaily){
-    const rd=D.repoDaily[repo];
+  for(const repo in RD){
+    const rd=RD[repo];
     for(const date in rd){if(date<vs||date>ve)continue;const i=b.idx[keyFor(date,g)];perBucket[i][repo]=(perBucket[i][repo]||0)+rd[date];}
   }
 
@@ -486,7 +515,7 @@ function renderRepos(){
   // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
   const traces=display.slice().reverse().map(repo=>{
     if(repo==='other')return {type:'bar',x:x,y:otherY,name:'other',marker:{color:OTHER_COLOR},hovertext:otherText,hovertemplate:'%{hovertext}<extra></extra>'};
-    return {type:'bar',x:x,y:namedY[repo],name:repo,marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
+    return {type:'bar',x:x,y:namedY[repo],name:shortRepo(repo),marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
   });
   const layout=baseLayout('commits '+granLabel[g]);
   layout.barmode='stack';
@@ -494,8 +523,8 @@ function renderRepos(){
   layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}};
   layout.title={text:'By repository ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=true;
-  layout.legend={font:{size:11},traceorder:'reversed',bgcolor:'transparent'}; // right-side, scrolls when long
-  layout.margin.r=210;
+  layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30}; // right-side, scrolls when long
+  layout.margin.r=150;
   Plotly.react('repo-chart',traces,layout,cfg);
 }
 
@@ -552,7 +581,7 @@ function humanSpan(vs,ve){
 }
 function updateSubtitle(){
   const [vs,ve]=visibleRange();
-  let vt=0;for(const date in D.daily){if(date>=vs&&date<=ve)vt+=D.daily[date];}
+  let vt=0;for(const date in DAILY){if(date>=vs&&date<=ve)vt+=DAILY[date];}
   document.getElementById('subtitle').textContent=vt.toLocaleString()+' commits  ·  '+vs+' → '+ve+' ('+humanSpan(vs,ve)+')';
 }
 function renderAll(){updateSubtitle();renderTotal();renderRepos();renderTotals();applyZoom();}
@@ -563,6 +592,7 @@ document.querySelectorAll('#controls button[data-g]').forEach(b=>b.addEventListe
   renderAll();writeHash();
 }));
 document.getElementById('topn').addEventListener('change',e=>{topN=Math.max(1,parseInt(e.target.value)||1);renderRepos();renderTotals();applyZoom();writeHash();});
+document.getElementById('privacy').addEventListener('change',e=>{privacyMode=e.target.value;syncActive();renderAll();writeHash();});
 
 // Range: All time / Past... (sub-dropdown) / Custom range (date pickers), like gh-star-history
 const rangeMode=document.getElementById('range-mode');
@@ -607,6 +637,7 @@ function writeHash(){
   if(currentRange==='custom')p.push('from='+customRange[0],'to='+customRange[1]);
   else p.push('range='+currentRange);
   p.push('g='+g,'top='+topN);
+  if(privacyMode!=='shown')p.push('priv='+privacyMode);
   const h='#'+p.join('&');
   try{history.replaceState(null,'',h);}catch(e){location.hash=h;}
 }
@@ -619,11 +650,14 @@ function readHash(){
   else if(range&&PERIOD_MS[range]){currentRange=range;rangeMode.value='past';pastSelect.value=range;pastSelect.style.display='inline-block';}
   const gg=p.get('g');if(gg&&['daily','weekly','monthly'].indexOf(gg)>=0){g=gg;hashG=true;}
   const t=p.get('top');if(t){const n=parseInt(t);if(n>=1){topN=n;document.getElementById('topn').value=n;}}
+  const pv=p.get('priv');if(pv&&['shown','anon','hidden'].indexOf(pv)>=0){privacyMode=pv;document.getElementById('privacy').value=pv;}
 }
 
 readHash();
 topN=Math.max(1,parseInt(document.getElementById('topn').value)||20); // sync with input in case the browser restored a value
 if(!hashG&&D.autoGranularity)g=autoGran(); // match the range's span unless granularity was set (hash or -g)
+if(!PRIVATE.size){document.getElementById('privacy').style.display='none';document.getElementById('privacy-label').style.display='none';} // nothing to toggle
+syncActive();
 document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x.dataset.g===g));
 renderAll();writeHash();
 </script></body></html>`;
@@ -706,7 +740,10 @@ function main() {
   const total = Object.values(daily).reduce((a, b) => a + b, 0);
   console.log(`  ${privateRepos.size} private repo(s) ${opts.includePrivate ? 'included' : 'excluded'}.`);
 
-  const html = renderHTML({ login, daily, repoDaily, defaultGranularity: opts.granularity, autoGranularity: !opts.granularityExplicit, style: opts.style, total, rangeStart, rangeEnd });
+  // Private repos present in the embedded data (lets the page show/anonymize/hide them client-side).
+  const privateList = [...privateRepos].filter((r) => repoDaily[r]);
+
+  const html = renderHTML({ login, daily, repoDaily, privateRepos: privateList, defaultGranularity: opts.granularity, autoGranularity: !opts.granularityExplicit, style: opts.style, total, rangeStart, rangeEnd });
   const outFile = path.resolve(opts.output || 'commit-history.html');
   fs.writeFileSync(outFile, html);
   console.log(`\n${total.toLocaleString()} commits from ${rangeStart} to ${rangeEnd}. Wrote ${outFile}`);
