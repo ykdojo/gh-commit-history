@@ -1,0 +1,27 @@
+{
+  "name": "gh-commit-history",
+  "version": "0.1.0",
+  "description": "Visualize your GitHub commit history across multiple years as an interactive chart, powered by gh CLI",
+  "bin": {
+    "gh-commit-history": "bin/cli.js"
+  },
+  "keywords": [
+    "github",
+    "commits",
+    "commit-history",
+    "contributions",
+    "visualization",
+    "cli",
+    "plotly"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ykdojo/gh-commit-history.git"
+  },
+  "engines": {
+    "node": ">=16"
+  },
+  "files": [
+    "bin/"
+  ]
+}
