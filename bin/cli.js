@@ -389,6 +389,8 @@ const colorByRepo={Other:OTHER_COLOR,private:'#a371f7'},allRankIndex={};
 rankRepos(D.rangeStart,D.rangeEnd,D.repoDaily).forEach((x,i)=>{colorByRepo[x.repo]=PALETTE[i%PALETTE.length];allRankIndex[x.repo]=i;});
 // Compact legend label: drop the user's own "login/" prefix (still unique among their repos); keep owner for others.
 function shortRepo(r){return r.indexOf(D.login+'/')===0?r.slice(D.login.length+1):r;}
+// Legend label: also truncate so the legend column stays narrow (full name is in the hover).
+function legendLabel(r){const s=shortRepo(r);return s.length>16?s.slice(0,15)+'…':s;}
 
 // Privacy view: shown (default) | anon (merge private repos into one "private") | hidden (drop them).
 // RD/DAILY are the active datasets all the charts read; syncActive() rebuilds them for the current mode.
@@ -515,7 +517,7 @@ function renderRepos(){
   // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
   const traces=display.slice().reverse().map(repo=>{
     if(repo==='other')return {type:'bar',x:x,y:otherY,name:'other',marker:{color:OTHER_COLOR},hovertext:otherText,hovertemplate:'%{hovertext}<extra></extra>'};
-    return {type:'bar',x:x,y:namedY[repo],name:shortRepo(repo),marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
+    return {type:'bar',x:x,y:namedY[repo],name:legendLabel(repo),marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
   });
   const layout=baseLayout('commits '+granLabel[g]);
   layout.barmode='stack';
@@ -524,7 +526,7 @@ function renderRepos(){
   layout.title={text:'By repository ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=true;
   layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30}; // right-side, scrolls when long
-  layout.margin.r=150;
+  layout.margin.r=125;
   Plotly.react('repo-chart',traces,layout,cfg);
 }
 
