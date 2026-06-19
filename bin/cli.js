@@ -568,9 +568,13 @@ function renderTotals(){
 }
 
 function applyZoom(){
-  // Always bound the axis explicitly to the data range; autorange would expand to
-  // the full-calendar-year background bands and show empty space past today.
-  const r={'xaxis.autorange':false,'xaxis.range':visibleRange()};
+  // Bound the axis explicitly (autorange would expand to the full-year background bands),
+  // but pad by half a bucket each side so the first/last bars aren't clipped in half.
+  const [vs,ve]=visibleRange();
+  const padMs=(g==='daily'?0.5:g==='weekly'?3.5:15)*864e5;
+  const lo=new Date(new Date(vs+'T00:00:00Z').getTime()-padMs).toISOString();
+  const hi=new Date(new Date(ve+'T00:00:00Z').getTime()+padMs).toISOString();
+  const r={'xaxis.autorange':false,'xaxis.range':[lo,hi]};
   Plotly.relayout('chart',r);Plotly.relayout('repo-chart',r);
 }
 
