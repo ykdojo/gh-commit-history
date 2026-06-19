@@ -506,7 +506,9 @@ function renderTotals(){
 }
 
 function applyZoom(){
-  const r=currentRange==='all'?{'xaxis.autorange':true}:{'xaxis.autorange':false,'xaxis.range':visibleRange()};
+  // Always bound the axis explicitly to the data range; autorange would expand to
+  // the full-calendar-year background bands and show empty space past today.
+  const r={'xaxis.autorange':false,'xaxis.range':visibleRange()};
   Plotly.relayout('chart',r);Plotly.relayout('repo-chart',r);
 }
 
