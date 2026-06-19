@@ -387,7 +387,7 @@ function yearBands(){
 }
 
 const granLabel={daily:'per day',weekly:'per week',monthly:'per month'};
-let g=D.defaultGranularity, topN=20, currentRange='all', customRange=[D.rangeStart,D.rangeEnd];
+let g=D.defaultGranularity, topN=20, currentRange='all', customRange=[D.rangeStart,D.rangeEnd], hashG=false;
 
 function pastRange(key){
   if(key.endsWith('y'))return [subYears(D.rangeEnd,parseInt(key)),D.rangeEnd];
@@ -408,7 +408,7 @@ function autoGran(){
 function applyRangeChange(){
   g=autoGran();
   document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x.dataset.g===g));
-  renderAll();
+  renderAll();writeHash();
 }
 
 function baseLayout(yTitle){
@@ -543,11 +543,11 @@ function updateSubtitle(){
 function renderAll(){updateSubtitle();renderTotal();renderRepos();renderTotals();applyZoom();}
 
 document.querySelectorAll('#controls button[data-g]').forEach(b=>b.addEventListener('click',()=>{
-  g=b.dataset.g;
+  g=b.dataset.g;hashG=true;
   document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x===b));
-  renderAll();
+  renderAll();writeHash();
 }));
-document.getElementById('topn').addEventListener('change',e=>{topN=Math.max(1,parseInt(e.target.value)||1);renderRepos();renderTotals();applyZoom();});
+document.getElementById('topn').addEventListener('change',e=>{topN=Math.max(1,parseInt(e.target.value)||1);renderRepos();renderTotals();applyZoom();writeHash();});
 
 // Range: All time / Past... (sub-dropdown) / Custom range (date pickers), like gh-star-history
 const rangeMode=document.getElementById('range-mode');
@@ -584,10 +584,31 @@ pastSelect.addEventListener('change',function(){currentRange=this.value;applyRan
   if(startInput.value&&endInput.value){customRange=[startInput.value,endInput.value];currentRange='custom';applyRangeChange();}
 }));
 
+// Persist view state in the URL hash (readable key=value; hash works on file:// with no reload).
+function writeHash(){
+  const p=[];
+  if(currentRange==='custom')p.push('from='+customRange[0],'to='+customRange[1]);
+  else p.push('range='+currentRange);
+  p.push('g='+g,'top='+topN);
+  const h='#'+p.join('&');
+  try{history.replaceState(null,'',h);}catch(e){location.hash=h;}
+}
+function readHash(){
+  const raw=location.hash.replace(/^#/,'');if(!raw)return;
+  const p=new URLSearchParams(raw);
+  const from=p.get('from'),to=p.get('to'),range=p.get('range');
+  if(from&&to){customRange=[from,to];currentRange='custom';rangeMode.value='custom';customSpan.style.display='inline';pastSelect.style.display='none';startInput.value=from;endInput.value=to;}
+  else if(range==='all'){currentRange='all';rangeMode.value='all';}
+  else if(range&&PERIOD_MS[range]){currentRange=range;rangeMode.value='past';pastSelect.value=range;pastSelect.style.display='inline-block';}
+  const gg=p.get('g');if(gg&&['daily','weekly','monthly'].indexOf(gg)>=0){g=gg;hashG=true;}
+  const t=p.get('top');if(t){const n=parseInt(t);if(n>=1){topN=n;document.getElementById('topn').value=n;}}
+}
+
+readHash();
 topN=Math.max(1,parseInt(document.getElementById('topn').value)||20); // sync with input in case the browser restored a value
-if(D.autoGranularity)g=autoGran(); // match the default range's span unless -g was given
+if(!hashG&&D.autoGranularity)g=autoGran(); // match the range's span unless granularity was set (hash or -g)
 document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x.dataset.g===g));
-renderAll();
+renderAll();writeHash();
 </script></body></html>`;
 }
 
