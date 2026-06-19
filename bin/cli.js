@@ -64,7 +64,7 @@ Options:
   --years <n>          Limit to the past n years (default: all history since account creation)
   -g, --granularity    daily | weekly | monthly (default: weekly)
   --style <name>       blue (default) | green | purple
-  -o, --output <path>  Output HTML path (default: commit-history.html)
+  -o, --output <path>  Output HTML path (default: ~/.gh-commit-history/<user>.html)
   --exclude-private    Exclude private repositories (private are included by default)
   --no-open            Don't auto-open the browser
   --no-cache           Skip cache, fetch everything fresh
@@ -709,7 +709,7 @@ function main() {
   let anyTruncated = false;
 
   if (windows.some((w) => !cache.windows[w.key] || w.isCurrent || !opts.cache)) {
-    console.log('  (Uses the rate-limited commit search API, so this can take a few minutes the first time. Progress is cached per quarter - safe to stop and resume.)');
+    console.log('  (Uses the rate-limited commit search API. The first run takes a few minutes for small histories, longer (often 10-20 min) for very active ones, because GitHub throttles search with ~60s cooldowns. Progress is cached per quarter - safe to stop and resume.)');
   }
 
   for (const w of windows) {
@@ -754,7 +754,10 @@ function main() {
   const privateList = [...privateRepos].filter((r) => repoDaily[r]);
 
   const html = renderHTML({ login, daily, repoDaily, privateRepos: privateList, defaultGranularity: opts.granularity, autoGranularity: !opts.granularityExplicit, style: opts.style, total, rangeStart, rangeEnd });
-  const outFile = path.resolve(opts.output || 'commit-history.html');
+  // Default to the cache dir (per-user, like the JSON) so output is consistent and never
+  // clutters the cwd; it auto-opens anyway. -o writes wherever the user wants instead.
+  const outFile = opts.output ? path.resolve(opts.output) : path.join(CACHE_DIR, `${login}.html`);
+  fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, html);
   console.log(`\n${total.toLocaleString()} commits from ${rangeStart} to ${rangeEnd}. Wrote ${outFile}`);
 

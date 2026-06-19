@@ -32,7 +32,7 @@ npx gh-commit-history [username] [options]
 | `--years <n>` | Limit to the past n years (default: all history since account creation) |
 | `-g, --granularity <g>` | `daily`, `weekly` (default), or `monthly` |
 | `--style <name>` | `blue` (default), `green`, or `purple` |
-| `-o, --output <path>` | Output file path (default: `commit-history.html`) |
+| `-o, --output <path>` | Output file path (default: `~/.gh-commit-history/<user>.html`) |
 | `--exclude-private` | Exclude private repositories (private are included by default) |
 | `--no-open` | Don't auto-open the browser |
 | `--no-cache` | Skip cache and fetch fresh data |
