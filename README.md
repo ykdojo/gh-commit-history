@@ -65,8 +65,12 @@ The generated page has three linked charts plus shared controls (granularity, ra
 
 1. Fetches your commits via GitHub's commit **search API** (`author:<you>`), one date window per calendar quarter. Any window with more than 1000 results (the API's cap) is recursively split by date, so every commit is captured. Unlike the `contributionsCollection` API, search includes **private** repositories.
 2. De-dupes by commit SHA: the same commit copied into someone's fork shares its SHA, so only the canonical copy (a repo you own, else a non-fork) is kept. Forks that merely mirror your commits disappear; a fork where you authored *unique* commits keeps those.
-3. Caches each completed quarter to `~/.gh-commit-history/<user>.json`. Only the current quarter is refetched on subsequent runs.
+3. Caches each completed quarter to `~/.gh-commit-history/<user>.json` **as it finishes**, so the fetch is **resumable**: if you stop it (Ctrl-C) or it's interrupted, just rerun - it continues from the last completed quarter instead of starting over. On later runs only the current (in-progress) quarter is refetched; everything else is served from cache. Use `--no-cache` to ignore the cache and refetch from scratch.
 4. Embeds the per-repo daily series in a self-contained HTML file with an interactive [Plotly.js](https://plotly.com/javascript/) chart (loaded from CDN), and opens it in your browser. All aggregation, ranking, and range filtering happen client-side, so the controls are instant.
+
+### Caching
+
+The cache lives at `~/.gh-commit-history/<user>.json`, keyed per calendar quarter. A live progress line shows each quarter as it's fetched (and counts down during rate-limit pauses), so you can watch it build. Because past quarters never change, they're fetched once and reused forever - only the current quarter is refreshed on subsequent runs.
 
 ## Notes
 

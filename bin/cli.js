@@ -114,10 +114,24 @@ function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.ceil(ms));
 }
 
-// Live progress line (rewritten in place) so long rate-limit waits don't look frozen.
+// Progress output. fs.writeSync(1, ...) flushes immediately - process.stdout.write
+// is block-buffered when piped (e.g. logs/background), which hides progress until exit.
+const IS_TTY = !!process.stdout.isTTY;
+function writeOut(s) { try { fs.writeSync(1, s); } catch { process.stdout.write(s); } }
 let progressLabel = '';
-function progress(msg) { if (progressLabel) process.stdout.write(`\r  ${progressLabel}: ${msg}\x1b[K`); }
-function rateLimitWait() { for (let s = 60; s > 0; s--) { progress(`rate limited - resuming in ${s}s`); sleepSync(1000); } }
+function progress(msg) {
+  if (!progressLabel) return;
+  // TTY: rewrite the line in place. Piped: append a plain line so logs stay readable.
+  writeOut(IS_TTY ? `\r  ${progressLabel}: ${msg}\x1b[K` : `  ${progressLabel}: ${msg}\n`);
+}
+function finishLine(label, msg) { writeOut(IS_TTY ? `\r  ${label}: ${msg}\x1b[K\n` : `  ${label}: ${msg}\n`); }
+function rateLimitWait() {
+  for (let s = 60; s > 0; s--) {
+    if (IS_TTY) progress(`rate limited - resuming in ${s}s`);
+    else if (s === 60) progress('rate limited - waiting ~60s');
+    sleepSync(1000);
+  }
+}
 
 // The search API's *secondary* rate limit punishes bursts, so we space every
 // request ~3s apart and back off 60s on a 403 instead of failing.
@@ -436,20 +450,26 @@ function renderRepos(){
     for(const date in rd){if(date<vs||date>ve)continue;const i=b.idx[keyFor(date,g)];perBucket[i][repo]=(perBucket[i][repo]||0)+rd[date];}
   }
 
-  // Rank PER BUCKET: each bucket shows its own top-N repos; the rest of that bucket -> Other.
-  // This way a repo can never hide in "Other" while being a bucket's top contributor.
+  // Rank PER BUCKET: each bucket shows its own top-N repos; the rest of that bucket -> other.
+  // This way a repo can never hide in "other" while being a bucket's top contributor.
   const named=new Set();
   const namedY={}, otherY=new Array(x.length).fill(null), otherText=new Array(x.length).fill(null);
+  const bucketHover=new Array(x.length).fill(null); // full breakdown for a bucket, sorted by that bucket's counts
   const ensure=r=>{if(!namedY[r]){namedY[r]=new Array(x.length).fill(null);named.add(r);}};
   perBucket.forEach((m,i)=>{
-    const entries=Object.entries(m).sort((a,c)=>c[1]-a[1]);
-    entries.slice(0,topN).forEach(e=>{ensure(e[0]);namedY[e[0]][i]=e[1];});
-    const rest=entries.slice(topN);
+    const entries=Object.entries(m).sort((a,c)=>c[1]-a[1]); // sorted desc by THIS bucket's counts
+    if(!entries.length)return;
+    const top=entries.slice(0,topN), rest=entries.slice(topN);
+    top.forEach(e=>{ensure(e[0]);namedY[e[0]][i]=e[1];});
+    // Tooltip for named segments: this period's repos, sorted by commits (descending).
+    const lines=top.map(e=>'&nbsp;&nbsp;'+e[0]+': '+e[1]);
+    if(rest.length){const rt=rest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;other: '+rt+' ('+rest.length+(rest.length===1?' repo)':' repos)'));}
+    bucketHover[i]='<b>'+x[i]+'</b><br>'+lines.join('<br>');
     if(rest.length){
       const tot=rest.reduce((s,e)=>s+e[1],0);
       otherY[i]=tot;
       const shown=rest.slice(0,10).map(e=>'&nbsp;&nbsp;'+e[0]+': '+e[1]).join('<br>');
-      let txt='<b>other</b>: '+tot+' commits ('+rest.length+(rest.length===1?' repo)':' repos)')+'<br>'+shown;
+      let txt='<b>'+x[i]+' - other</b>: '+tot+' commits ('+rest.length+(rest.length===1?' repo)':' repos)')+'<br>'+shown;
       const more=rest.slice(10);
       if(more.length){const mt=more.reduce((s,e)=>s+e[1],0);txt+='<br>&nbsp;&nbsp;...and '+more.length+' more ('+mt+')';}
       otherText[i]=txt;
@@ -459,14 +479,15 @@ function renderRepos(){
   // Order named repos by all-time rank for stable stack layering & colors.
   const order=[...named].sort((a,c)=>(allRankIndex[a]==null?1e9:allRankIndex[a])-(allRankIndex[c]==null?1e9:allRankIndex[c]));
   const display=order.concat(otherY.some(v=>v!=null)?['other']:[]);
-  // largest at bottom: add in reverse display order
+  // largest at bottom: add in reverse display order. Named segments share the
+  // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
   const traces=display.slice().reverse().map(repo=>{
     if(repo==='other')return {type:'bar',x:x,y:otherY,name:'other',marker:{color:OTHER_COLOR},hovertext:otherText,hovertemplate:'%{hovertext}<extra></extra>'};
-    return {type:'bar',x:x,y:namedY[repo],name:repo,marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertemplate:repo+': %{y} commits<extra></extra>'};
+    return {type:'bar',x:x,y:namedY[repo],name:repo,marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
   });
   const layout=baseLayout('commits '+granLabel[g]);
   layout.barmode='stack';
-  layout.hovermode='x unified';
+  layout.hovermode='closest'; // unified would force stack order; closest lets us show our own sorted tooltip
   layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12}};
   layout.title={text:'By repository - top '+topN+' '+granLabel[g]+' ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=false; // membership varies per bucket; the hover names each segment, overall chart is the color key
@@ -620,11 +641,11 @@ function main() {
       progress('fetching...');
       res = fetchWindow(login, w.from, w.to);
       cache.windows[w.key] = res;
-      process.stdout.write(`\r  ${w.key}: ${res.commits.length} commits\x1b[K\n`);
+      finishLine(w.key, `${res.commits.length} commits`);
       progressLabel = '';
       if (opts.cache) saveCache(login, cache); // save incrementally; the search fetch is slow (rate-limited)
     } else {
-      console.log(`  ${w.key}: ${res.commits.length} commits (cached)`);
+      writeOut(`  ${w.key}: ${res.commits.length} commits (cached)\n`);
     }
     for (const c of res.commits) {
       if (c.priv) privateRepos.add(c.repo);
