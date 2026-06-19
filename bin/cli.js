@@ -282,8 +282,8 @@ function renderHTML({ login, daily, repoDaily, privateRepos, defaultGranularity,
   .container{max-width:1200px;margin:0 auto;padding:24px 20px}
   h1{text-align:center;font-size:22px;margin:8px 0 4px;color:#e6edf3}
   .subtitle{text-align:center;color:#8b949e;font-size:14px;margin-bottom:20px}
-  #controls{display:flex;gap:8px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
-  #controls .label{margin:0 4px 0 12px;font-size:13px;color:#8b949e}
+  #controls{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
+  #controls .label{margin:0 0 0 12px;font-size:13px;color:#8b949e}
   #controls .label:first-child{margin-left:0}
   #controls button{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer}
   #controls button:hover{border-color:${colors.accent}}
@@ -304,14 +304,16 @@ function renderHTML({ login, daily, repoDaily, privateRepos, defaultGranularity,
   <div class="subtitle" id="subtitle">${total.toLocaleString()} commits · ${rangeStart} to ${rangeEnd}</div>
   <div id="controls">
     <span class="label">Granularity:</span>
-    <button data-g="daily">Daily</button>
-    <button data-g="weekly">Weekly</button>
-    <button data-g="monthly">Monthly</button>
+    <select id="granularity">
+      <option value="daily">Daily</option>
+      <option value="weekly">Weekly</option>
+      <option value="monthly">Monthly</option>
+    </select>
     <span class="label">Range:</span>
     <select id="range-mode">
-      <option value="all">All</option>
+      <option value="all">All time</option>
       <option value="past">Past...</option>
-      <option value="custom">Custom</option>
+      <option value="custom">Custom range</option>
     </select>
     <select id="past-select" style="display:none">
       <option value="1w">1 week</option>
@@ -441,7 +443,7 @@ function autoGran(){
 }
 function applyRangeChange(){
   g=autoGran();
-  document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x.dataset.g===g));
+  document.getElementById('granularity').value=g;
   renderAll();writeHash();
 }
 
@@ -591,11 +593,10 @@ function updateSubtitle(){
 }
 function renderAll(){updateSubtitle();renderTotal();renderRepos();renderTotals();applyZoom();}
 
-document.querySelectorAll('#controls button[data-g]').forEach(b=>b.addEventListener('click',()=>{
-  g=b.dataset.g;hashG=true;
-  document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x===b));
+document.getElementById('granularity').addEventListener('change',e=>{
+  g=e.target.value;hashG=true;
   renderAll();writeHash();
-}));
+});
 document.getElementById('topn').addEventListener('change',e=>{topN=Math.max(1,parseInt(e.target.value)||1);renderRepos();renderTotals();applyZoom();writeHash();});
 document.getElementById('privacy').addEventListener('change',e=>{privacyMode=e.target.value;syncActive();renderAll();writeHash();});
 
@@ -663,7 +664,7 @@ topN=Math.max(1,parseInt(document.getElementById('topn').value)||20); // sync wi
 if(!hashG&&D.autoGranularity)g=autoGran(); // match the range's span unless granularity was set (hash or -g)
 if(!PRIVATE.size){document.getElementById('privacy').style.display='none';document.getElementById('privacy-label').style.display='none';} // nothing to toggle
 syncActive();
-document.querySelectorAll('#controls button[data-g]').forEach(x=>x.classList.toggle('active',x.dataset.g===g));
+document.getElementById('granularity').value=g;
 renderAll();writeHash();
 </script></body></html>`;
 }
