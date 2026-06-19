@@ -389,8 +389,9 @@ const colorByRepo={Other:OTHER_COLOR,private:'#a371f7'},allRankIndex={};
 rankRepos(D.rangeStart,D.rangeEnd,D.repoDaily).forEach((x,i)=>{colorByRepo[x.repo]=PALETTE[i%PALETTE.length];allRankIndex[x.repo]=i;});
 // Compact legend label: drop the user's own "login/" prefix (still unique among their repos); keep owner for others.
 function shortRepo(r){return r.indexOf(D.login+'/')===0?r.slice(D.login.length+1):r;}
-// Legend label: also truncate so the legend column stays narrow (full name is in the hover).
-function legendLabel(r){const s=shortRepo(r);return s.length>16?s.slice(0,15)+'…':s;}
+// Legend label: middle-truncate so the legend stays narrow but keeps the start AND the
+// (usually more distinctive) end of the name. Full name is always in the hover.
+function legendLabel(r){const s=shortRepo(r);return s.length>16?s.slice(0,8)+'…'+s.slice(-7):s;}
 
 // Privacy view: shown (default) | anon (merge private repos into one "private") | hidden (drop them).
 // RD/DAILY are the active datasets all the charts read; syncActive() rebuilds them for the current mode.
