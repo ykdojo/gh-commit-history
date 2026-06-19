@@ -8,6 +8,10 @@ GitHub's contribution calendar only shows one year at a time, daily-only, with n
 npx gh-commit-history ykdojo
 ```
 
+![Overview - total commits per month and a per-repository stacked breakdown](assets/overview.png)
+
+![Overall breakdown by repository](assets/overall-breakdown.png)
+
 Defaults to your authenticated user if no username is given.
 
 ## Prerequisites
