@@ -497,34 +497,29 @@ function renderRepos(){
   const order=ranked.slice(0,topN).map(e=>e.repo); // largest first, matches overall chart
   const topSet=new Set(order), totalRepos=ranked.length;
   const namedY={}; order.forEach(r=>{namedY[r]=new Array(x.length).fill(null);});
-  const otherY=new Array(x.length).fill(null), otherText=new Array(x.length).fill(null);
-  const bucketHover=new Array(x.length).fill(null); // full breakdown for a bucket, sorted by that bucket's counts
+  const otherY=new Array(x.length).fill(null);
+  const bucketHover=new Array(x.length).fill(null); // THIS bucket's own top-N breakdown, by its counts
   perBucket.forEach((m,i)=>{
     const entries=Object.entries(m).sort((a,c)=>c[1]-a[1]); // sorted desc by THIS bucket's counts
     if(!entries.length)return;
-    const top=entries.filter(e=>topSet.has(e[0])), rest=entries.filter(e=>!topSet.has(e[0]));
-    top.forEach(e=>{namedY[e[0]][i]=e[1];});
-    // Tooltip for named segments: this period's repos, sorted by commits (descending),
-    // each with a colored swatch matching its legend/segment color.
-    const lines=top.map(e=>'&nbsp;&nbsp;'+swatch(colorByRepo[e[0]]||OTHER_COLOR)+e[0]+': '+e[1]);
-    if(rest.length){const rt=rest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;'+swatch(OTHER_COLOR)+'other: '+rt+' ('+rest.length+(rest.length===1?' repo)':' repos)'));}
+    // Bar segments: the overall top-N repos individually; everything else aggregated into "other"
+    // (keeps colors/legend stable across buckets).
+    entries.forEach(e=>{if(topSet.has(e[0]))namedY[e[0]][i]=e[1];});
+    const overflow=entries.filter(e=>!topSet.has(e[0]));
+    if(overflow.length)otherY[i]=overflow.reduce((s,e)=>s+e[1],0);
+    // Tooltip: THIS period's own top-N repos by name - even ones that land in the overall
+    // "other" bucket (shown with the other color but their real name) - then the remaining tail.
+    const hTop=entries.slice(0,topN), hRest=entries.slice(topN);
+    const lines=hTop.map(e=>'&nbsp;&nbsp;'+swatch(topSet.has(e[0])?(colorByRepo[e[0]]||OTHER_COLOR):OTHER_COLOR)+e[0]+': '+e[1]);
+    if(hRest.length){const rt=hRest.reduce((s,e)=>s+e[1],0);lines.push('&nbsp;&nbsp;'+swatch(OTHER_COLOR)+'other: '+rt+' ('+hRest.length+(hRest.length===1?' repo)':' repos)'));}
     bucketHover[i]='<b>'+x[i]+'</b><br>'+lines.join('<br>');
-    if(rest.length){
-      const tot=rest.reduce((s,e)=>s+e[1],0);
-      otherY[i]=tot;
-      const shown=rest.slice(0,10).map(e=>'&nbsp;&nbsp;'+swatch(OTHER_COLOR)+e[0]+': '+e[1]).join('<br>');
-      let txt='<b>'+x[i]+' - other</b>: '+tot+' commits ('+rest.length+(rest.length===1?' repo)':' repos)')+'<br>'+shown;
-      const more=rest.slice(10);
-      if(more.length){const mt=more.reduce((s,e)=>s+e[1],0);txt+='<br>&nbsp;&nbsp;...and '+more.length+' more ('+mt+')';}
-      otherText[i]=txt;
-    }
   });
 
   const display=order.concat(otherY.some(v=>v!=null)?['other']:[]);
   // largest at bottom: add in reverse display order. Named segments share the
   // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
   const traces=display.slice().reverse().map(repo=>{
-    if(repo==='other')return {type:'bar',x:x,y:otherY,name:'other',marker:{color:OTHER_COLOR},hovertext:otherText,hovertemplate:'%{hovertext}<extra></extra>'};
+    if(repo==='other')return {type:'bar',x:x,y:otherY,name:'other',marker:{color:OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
     return {type:'bar',x:x,y:namedY[repo],name:legendLabel(repo),marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
   });
   const layout=baseLayout('commits '+granLabel[g]);
