@@ -309,9 +309,9 @@ function renderHTML({ login, daily, repoDaily, privateRepos, defaultGranularity,
     <button data-g="monthly">Monthly</button>
     <span class="label">Range:</span>
     <select id="range-mode">
-      <option value="all">All time</option>
+      <option value="all">All</option>
       <option value="past">Past...</option>
-      <option value="custom">Custom range</option>
+      <option value="custom">Custom</option>
     </select>
     <select id="past-select" style="display:none">
       <option value="1w">1 week</option>
@@ -511,8 +511,10 @@ function renderRepos(){
     }
   });
 
-  // Order named repos by all-time rank for stable stack layering & colors.
-  const order=[...named].sort((a,c)=>(allRankIndex[a]==null?1e9:allRankIndex[a])-(allRankIndex[c]==null?1e9:allRankIndex[c]));
+  // Order named repos by commits in the visible range (largest first), so the legend
+  // matches the overall-breakdown chart's order. Colors are stable (keyed separately).
+  const namedTotal={};named.forEach(r=>{namedTotal[r]=namedY[r].reduce((s,v)=>s+(v||0),0);});
+  const order=[...named].sort((a,c)=>namedTotal[c]-namedTotal[a]);
   const display=order.concat(otherY.some(v=>v!=null)?['other']:[]);
   // largest at bottom: add in reverse display order. Named segments share the
   // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
@@ -526,7 +528,7 @@ function renderRepos(){
   layout.hoverlabel={align:'left',bgcolor:'#161b22',bordercolor:'#30363d',font:{size:12,color:'#e6edf3'}};
   layout.title={text:'By repository ('+order.length+' repos shown)',font:{size:15},x:0,xanchor:'left'};
   layout.showlegend=true;
-  layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30}; // right-side, scrolls when long
+  layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30,x:1.0,xanchor:'left'}; // right-side, flush to the plot, scrolls when long
   layout.margin.r=125;
   Plotly.react('repo-chart',traces,layout,cfg);
 }
