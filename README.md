@@ -1,5 +1,7 @@
 # gh-commit-history
 
+[![npm](https://img.shields.io/npm/v/gh-commit-history)](https://www.npmjs.com/package/gh-commit-history)
+
 Visualize your GitHub commit history across **all your years on one screen** as an interactive chart. Powered by the [GitHub CLI](https://cli.github.com/) - no API tokens needed.
 
 GitHub's contribution calendar only shows one year at a time, daily-only, with no per-repo breakdown. This shows your whole history with switchable daily / weekly / monthly granularity, a flexible range selector, and a per-repository breakdown.
