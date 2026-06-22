@@ -36,6 +36,7 @@ npx gh-commit-history [username] [options]
 | `--style <name>` | `blue` (default), `green`, or `purple` |
 | `-o, --output <path>` | Output file path (default: `~/.gh-commit-history/<user>.html`) |
 | `--exclude-private` | Exclude private repositories (private are included by default) |
+| `-r, --repo <name>` | Single-repo view: just this repo's commits, timeline scoped to its lifetime (`name` assumes your account, or pass `owner/name`) |
 | `--no-open` | Don't auto-open the browser |
 | `--no-cache` | Skip cache and fetch fresh data |
 | `-h, --help` | Show help |
@@ -51,4 +52,7 @@ npx gh-commit-history ykdojo -g monthly
 
 # Last 5 years, green accent
 npx gh-commit-history torvalds --years 5 --style green
+
+# A single repository's progress (timeline scoped to that repo's lifetime)
+npx gh-commit-history --repo strategy-deckbuilder
 ```
