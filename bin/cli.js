@@ -306,8 +306,9 @@ function renderHTML({ login, repo, daily, repoDaily, privateRepos, defaultGranul
   h1{text-align:center;font-size:22px;margin:8px 0 4px;color:#e6edf3}
   .subtitle{text-align:center;color:#8b949e;font-size:14px;margin-bottom:20px}
   #controls{display:flex;gap:6px;align-items:center;justify-content:center;flex-wrap:wrap;margin-bottom:16px}
-  #controls .label{margin:0 0 0 12px;font-size:13px;color:#8b949e}
-  #controls .label:first-child{margin-left:0}
+  #controls .label{margin:0;font-size:13px;color:#8b949e}
+  #controls .grp{display:inline-flex;align-items:center;gap:6px;margin-left:12px}
+  #controls .grp:first-child{margin-left:0}
   #controls button{background:#161b22;color:#c9d1d9;border:1px solid #30363d;border-radius:6px;padding:6px 14px;font-size:13px;cursor:pointer}
   #controls button:hover{border-color:${colors.accent}}
   #controls button.active{background:${colors.accent};border-color:${colors.accent};color:#0d1117;font-weight:600}
@@ -326,42 +327,50 @@ function renderHTML({ login, repo, daily, repoDaily, privateRepos, defaultGranul
   <h1>${heading}</h1>
   <div class="subtitle" id="subtitle">${total.toLocaleString()} commits · ${rangeStart} to ${rangeEnd}</div>
   <div id="controls">
-    <span class="label">Granularity:</span>
-    <select id="granularity">
-      <option value="daily">Daily</option>
-      <option value="weekly">Weekly</option>
-      <option value="monthly">Monthly</option>
-    </select>
-    <span class="label">Range:</span>
-    <select id="range-mode">
-      <option value="all">All time</option>
-      <option value="past">Past...</option>
-      <option value="custom">Custom range</option>
-    </select>
-    <select id="past-select" style="display:none">
-      <option value="1w">1 week</option>
-      <option value="1m">1 month</option>
-      <option value="3m">3 months</option>
-      <option value="6m">6 months</option>
-      <option value="1y">1 year</option>
-      <option value="2y">2 years</option>
-      <option value="3y">3 years</option>
-      <option value="4y">4 years</option>
-      <option value="5y">5 years</option>
-      <option value="10y">10 years</option>
-      <option value="20y">20 years</option>
-    </select>
-    <span id="custom-range" style="display:none">
-      <input type="date" id="start-date"><span class="label">to</span><input type="date" id="end-date">
+    <span class="grp">
+      <span class="label">Granularity:</span>
+      <select id="granularity">
+        <option value="daily">Daily</option>
+        <option value="weekly">Weekly</option>
+        <option value="monthly">Monthly</option>
+      </select>
     </span>
-    <span class="label" id="topn-label">Top repos:</span>
-    <input type="number" id="topn" min="1" value="20" autocomplete="off">
-    <span class="label" id="privacy-label">Private repos:</span>
-    <select id="privacy">
-      <option value="shown">Shown</option>
-      <option value="anon">Anonymized</option>
-      <option value="hidden">Hidden</option>
-    </select>
+    <span class="grp">
+      <span class="label">Range:</span>
+      <select id="range-mode">
+        <option value="all">All time</option>
+        <option value="past">Past...</option>
+        <option value="custom">Custom range</option>
+      </select>
+      <select id="past-select" style="display:none">
+        <option value="1w">1 week</option>
+        <option value="1m">1 month</option>
+        <option value="3m">3 months</option>
+        <option value="6m">6 months</option>
+        <option value="1y">1 year</option>
+        <option value="2y">2 years</option>
+        <option value="3y">3 years</option>
+        <option value="4y">4 years</option>
+        <option value="5y">5 years</option>
+        <option value="10y">10 years</option>
+        <option value="20y">20 years</option>
+      </select>
+      <span id="custom-range" style="display:none">
+        <input type="date" id="start-date"><span class="label">to</span><input type="date" id="end-date">
+      </span>
+    </span>
+    <span class="grp" id="grp-topn">
+      <span class="label" id="topn-label">Top repos:</span>
+      <input type="number" id="topn" min="1" value="20" autocomplete="off">
+    </span>
+    <span class="grp" id="grp-privacy">
+      <span class="label" id="privacy-label">Private repos:</span>
+      <select id="privacy">
+        <option value="shown">Shown</option>
+        <option value="anon">Anonymized</option>
+        <option value="hidden">Hidden</option>
+      </select>
+    </span>
     <!--NAV--><!--/NAV-->
   </div>
   <div id="chart" class="chart"></div>
@@ -691,9 +700,9 @@ function readHash(){
 readHash();
 topN=Math.max(1,parseInt(document.getElementById('topn').value)||20); // sync with input in case the browser restored a value
 if(!hashG&&D.autoGranularity)g=autoGran(); // match the range's span unless granularity was set (hash or -g)
-if(!PRIVATE.size){document.getElementById('privacy').style.display='none';document.getElementById('privacy-label').style.display='none';} // nothing to toggle
+if(!PRIVATE.size){document.getElementById('grp-privacy').style.display='none';} // nothing to toggle
 // Single-repo view: hide the per-repo controls and charts - there's only one repo.
-if(D.singleRepo){['topn','topn-label','privacy','privacy-label','repo-chart','repo-totals-chart'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
+if(D.singleRepo){['grp-topn','grp-privacy','repo-chart','repo-totals-chart'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 syncActive();
 document.getElementById('granularity').value=g;
 // Cross-chart switcher: present only when the CLI injected sibling options. Self-selects the
@@ -736,8 +745,10 @@ function refreshSwitcher(dir) {
   });
   const opts = charts.map((c) => `<option value="${htmlEsc(c.name)}">${c.label}</option>`).join('');
   // Hide the control entirely when there's only one chart - nothing to switch between.
+  // Inline-styled group (not the .grp class) so label+select stay together as one wrap unit
+  // even in charts generated before this style existed.
   const region = charts.length >= 2
-    ? `<!--NAV--><span class="label" id="chart-nav-label">Chart:</span><select id="chart-nav">${opts}</select><!--/NAV-->`
+    ? `<!--NAV--><span style="display:inline-flex;align-items:center;gap:6px;margin-left:12px"><span class="label" id="chart-nav-label">Chart:</span><select id="chart-nav">${opts}</select></span><!--/NAV-->`
     : '<!--NAV--><!--/NAV-->';
   for (const c of charts) {
     const p = path.join(dir, c.name);
