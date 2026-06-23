@@ -32,6 +32,7 @@ npx gh-commit-history [username] [options]
 | Flag | Description |
 |------|-------------|
 | `--years <n>` | Limit to the past n years (default: all history since account creation) |
+| `--range <period>` | Initial view when the page opens: `1w`, `1m`, `3m`, `6m`, `1y`, `2y` … or `all` (default). Full history is still loaded - the range selector keeps every option. |
 | `-g, --granularity <g>` | `daily`, `weekly` (default), or `monthly` |
 | `--style <name>` | `blue` (default), `green`, or `purple` |
 | `-o, --output <path>` | Output file path (default: `~/.gh-commit-history/<user>.html`) |
@@ -55,4 +56,7 @@ npx gh-commit-history torvalds --years 5 --style green
 
 # A single repository's progress (timeline scoped to that repo's lifetime)
 npx gh-commit-history --repo strategy-deckbuilder
+
+# Open straight to the past month, daily
+npx gh-commit-history --range 1m
 ```

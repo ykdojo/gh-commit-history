@@ -31,6 +31,7 @@ function parseArgs(argv) {
     cache: true,
     includePrivate: true,
     repo: null, // single-repo view: "name" (own) or "owner/name"
+    range: null, // initial view in the generated HTML (e.g. "1m"); null = all time. Data is still full history.
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -43,6 +44,7 @@ function parseArgs(argv) {
     else if (a === '--no-cache') opts.cache = false;
     else if (a === '--exclude-private' || a === '--no-private') opts.includePrivate = false;
     else if (a === '--repo' || a === '-r') opts.repo = argv[++i];
+    else if (a === '--range') opts.range = argv[++i];
     else if (a.startsWith('-')) fail(`Unknown option: ${a}`);
     else opts.username = a.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
   }
@@ -64,6 +66,8 @@ Usage:
 
 Options:
   --years <n>          Limit to the past n years (default: all history since account creation)
+  --range <period>     Initial view when the page opens: 1w | 1m | 3m | 6m | 1y | 2y ... | all
+                       (default: all). Full history is still loaded; the selector keeps every range.
   -g, --granularity    daily | weekly | monthly (default: weekly)
   --style <name>       blue (default) | green | purple
   -o, --output <path>  Output HTML path (default: ~/.gh-commit-history/<user>.html)
@@ -76,6 +80,7 @@ Options:
 
 Examples:
   npx gh-commit-history
+  npx gh-commit-history ykdojo --range 1m
   npx gh-commit-history ykdojo --years 6 -g monthly
   npx gh-commit-history torvalds --style green -o linus.html
   npx gh-commit-history --repo strategy-deckbuilder
@@ -232,6 +237,10 @@ function fetchWindow(login, fromISO, toISO) {
 // Date / window helpers (all in UTC for stable bucketing)
 // ---------------------------------------------------------------------------
 function ymd(d) { return d.toISOString().slice(0, 10); }
+// Local calendar date (YYYY-MM-DD) in the runner's timezone. Commit dates are bucketed by
+// the offset baked into commit.author.date (the committer's local day), so "today" must be
+// the local day too - otherwise an evening run west of UTC shows a phantom empty tomorrow.
+function localYmd(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
 
 // Quarters covering [startDate, endDate]. We fetch whole quarters (the quarter
 // containing startDate may begin slightly earlier); the display range clips back
@@ -274,9 +283,9 @@ function saveCache(login, cache) {
 // ---------------------------------------------------------------------------
 // HTML rendering (aggregation happens client-side so the granularity toggle is live)
 // ---------------------------------------------------------------------------
-function renderHTML({ login, repo, daily, repoDaily, privateRepos, defaultGranularity, autoGranularity, style, total, rangeStart, rangeEnd }) {
+function renderHTML({ login, repo, daily, repoDaily, privateRepos, defaultGranularity, autoGranularity, defaultRange, style, total, rangeStart, rangeEnd }) {
   const colors = STYLES[style] || STYLES.blue;
-  const payload = { login, daily, repoDaily, privateRepos: privateRepos || [], defaultGranularity, autoGranularity, accent: colors.accent, total, rangeStart, rangeEnd, singleRepo: !!repo };
+  const payload = { login, daily, repoDaily, privateRepos: privateRepos || [], defaultGranularity, autoGranularity, defaultRange: defaultRange || 'all', accent: colors.accent, total, rangeStart, rangeEnd, singleRepo: !!repo };
   // Single-repo view relabels the page/heading/command around the repo name.
   const docTitle = repo ? `${repo} commit history` : `${login} commit history`;
   const heading = repo ? repo : `${login}'s commit history`;
@@ -434,7 +443,7 @@ function yearBands(){
 }
 
 const granLabel={daily:'per day',weekly:'per week',monthly:'per month'};
-let g=D.defaultGranularity, topN=20, currentRange='all', customRange=[D.rangeStart,D.rangeEnd], hashG=false;
+let g=D.defaultGranularity, topN=20, currentRange=D.defaultRange||'all', customRange=[D.rangeStart,D.rangeEnd], hashG=false;
 
 function pastRange(key){
   if(key.endsWith('y'))return [subYears(D.rangeEnd,parseInt(key)),D.rangeEnd];
@@ -635,7 +644,8 @@ if(defaultPast)pastSelect.value=defaultPast;
 startInput.min=endInput.min=D.rangeStart;startInput.max=endInput.max=D.rangeEnd;
 startInput.value=D.rangeStart;endInput.value=D.rangeEnd;
 
-// Default view: all time (currentRange already 'all', rangeMode already shows it).
+// Initial view from --range (currentRange set above; defaults to all time). A URL hash, if present, overrides this in readHash().
+if(currentRange!=='all'&&PERIOD_MS[currentRange]){rangeMode.value='past';pastSelect.value=currentRange;pastSelect.style.display='inline-block';}
 
 rangeMode.addEventListener('change',function(){
   pastSelect.style.display=this.value==='past'?'inline-block':'none';
@@ -697,6 +707,8 @@ function main() {
   if (opts.help) { console.log(HELP); return; }
   if (!['daily', 'weekly', 'monthly'].includes(opts.granularity)) fail(`Invalid granularity: ${opts.granularity}`);
   if (opts.years !== null && (!Number.isInteger(opts.years) || opts.years < 1)) fail('--years must be a positive integer');
+  const RANGE_KEYS = ['all', '20y', '10y', '5y', '4y', '3y', '2y', '1y', '6m', '3m', '1m', '1w'];
+  if (opts.range !== null && !RANGE_KEYS.includes(opts.range)) fail(`Invalid --range: ${opts.range} (use one of ${RANGE_KEYS.join(', ')})`);
 
   const login = resolveUsername(opts.username);
 
@@ -716,7 +728,7 @@ function main() {
     console.log(`Fetching commit history for ${login} (all history since ${ymd(start)})...`);
   }
   const rangeStart = ymd(start);
-  const rangeEnd = ymd(end);
+  const rangeEnd = localYmd(end); // local "today" so the axis ends on the runner's current day, not UTC's
 
   const cache = opts.cache ? loadCache(login) : { windows: {} };
   const windows = quarterWindows(start, end);
@@ -780,7 +792,7 @@ function main() {
   // Private repos present in the embedded data (lets the page show/anonymize/hide them client-side).
   const privateList = [...privateRepos].filter((r) => repoDaily[r]);
 
-  const html = renderHTML({ login, repo: repoFull, daily, repoDaily, privateRepos: privateList, defaultGranularity: opts.granularity, autoGranularity: !opts.granularityExplicit, style: opts.style, total, rangeStart: displayStart, rangeEnd });
+  const html = renderHTML({ login, repo: repoFull, daily, repoDaily, privateRepos: privateList, defaultGranularity: opts.granularity, autoGranularity: !opts.granularityExplicit, defaultRange: opts.range, style: opts.style, total, rangeStart: displayStart, rangeEnd });
   // Default to the cache dir (per-user, like the JSON) so output is consistent and never
   // clutters the cwd; it auto-opens anyway. -o writes wherever the user wants instead.
   // Single-repo view gets its own filename so it never clobbers the all-repos page.
