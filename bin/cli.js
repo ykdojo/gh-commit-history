@@ -241,6 +241,7 @@ function ymd(d) { return d.toISOString().slice(0, 10); }
 // the offset baked into commit.author.date (the committer's local day), so "today" must be
 // the local day too - otherwise an evening run west of UTC shows a phantom empty tomorrow.
 function localYmd(d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); }
+function htmlEsc(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 
 // Quarters covering [startDate, endDate]. We fetch whole quarters (the quarter
 // containing startDate may begin slightly earlier); the display range clips back
@@ -290,9 +291,13 @@ function renderHTML({ login, repo, daily, repoDaily, privateRepos, defaultGranul
   const docTitle = repo ? `${repo} commit history` : `${login} commit history`;
   const heading = repo ? repo : `${login}'s commit history`;
   const cmd = repo ? `npx gh-commit-history --repo ${repo}` : `npx gh-commit-history ${login}`;
+  // Label used by the cross-chart switcher dropdown (read back from siblings via this meta).
+  const shortRepoName = repo ? (repo.toLowerCase().startsWith(login.toLowerCase() + '/') ? repo.split('/').pop() : repo) : null;
+  const navLabel = shortRepoName ? `${login} · ${shortRepoName}` : `${login} · all repos`;
 
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${docTitle}</title>
+<meta name="gch-label" content="${htmlEsc(navLabel)}">
 <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
@@ -357,6 +362,7 @@ function renderHTML({ login, repo, daily, repoDaily, privateRepos, defaultGranul
       <option value="anon">Anonymized</option>
       <option value="hidden">Hidden</option>
     </select>
+    <!--NAV--><!--/NAV-->
   </div>
   <div id="chart" class="chart"></div>
   <div id="repo-chart" class="chart"></div>
@@ -690,6 +696,14 @@ if(!PRIVATE.size){document.getElementById('privacy').style.display='none';docume
 if(D.singleRepo){['topn','topn-label','privacy','privacy-label','repo-chart','repo-totals-chart'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});}
 syncActive();
 document.getElementById('granularity').value=g;
+// Cross-chart switcher: present only when the CLI injected sibling options. Self-selects the
+// current file (a file:// page knows its own name) and carries the view hash across the jump.
+const chartNav=document.getElementById('chart-nav');
+if(chartNav){
+  const self=decodeURIComponent(location.pathname.split('/').pop());
+  for(const o of chartNav.options){if(o.value===self){o.selected=true;break;}}
+  chartNav.addEventListener('change',()=>{if(chartNav.value)location.href=chartNav.value+location.hash;});
+}
 renderAll();writeHash();
 </script></body></html>`;
 }
@@ -697,6 +711,40 @@ renderAll();writeHash();
 function openInBrowser(file) {
   const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
   try { execFileSync(cmd, [file], { stdio: 'ignore' }); } catch { /* ignore */ }
+}
+
+// Refresh the cross-chart switcher across every gh-commit-history page in `dir`. Each page
+// carries a <meta name="gch-label"> and a <!--NAV-->..<!--/NAV--> region; we rebuild one
+// identical region (no per-file 'selected' - each page self-selects at runtime) and write it
+// into all of them, so a chart made later shows up in the dropdowns of ones made earlier.
+function refreshSwitcher(dir) {
+  let names;
+  try { names = fs.readdirSync(dir).filter((f) => f.endsWith('.html')); } catch { return; }
+  const charts = [];
+  for (const name of names) {
+    let html;
+    try { html = fs.readFileSync(path.join(dir, name), 'utf8'); } catch { continue; }
+    const m = html.match(/<meta name="gch-label" content="([^"]*)">/);
+    if (!m || !/<!--NAV-->[\s\S]*?<!--\/NAV-->/.test(html)) continue; // not one of our pages
+    charts.push({ name, label: m[1] }); // label is already HTML-escaped in the file
+  }
+  if (!charts.length) return;
+  // All-repos pages first, then the rest alphabetically by label.
+  charts.sort((a, b) => {
+    const aa = a.label.includes('all repos'), ba = b.label.includes('all repos');
+    return aa !== ba ? (aa ? -1 : 1) : a.label.localeCompare(b.label);
+  });
+  const opts = charts.map((c) => `<option value="${htmlEsc(c.name)}">${c.label}</option>`).join('');
+  // Hide the control entirely when there's only one chart - nothing to switch between.
+  const region = charts.length >= 2
+    ? `<!--NAV--><span class="label" id="chart-nav-label">Chart:</span><select id="chart-nav">${opts}</select><!--/NAV-->`
+    : '<!--NAV--><!--/NAV-->';
+  for (const c of charts) {
+    const p = path.join(dir, c.name);
+    const html = fs.readFileSync(p, 'utf8');
+    const next = html.replace(/<!--NAV-->[\s\S]*?<!--\/NAV-->/, region);
+    if (next !== html) fs.writeFileSync(p, next);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -800,6 +848,7 @@ function main() {
   const outFile = opts.output ? path.resolve(opts.output) : path.join(CACHE_DIR, defaultName);
   fs.mkdirSync(path.dirname(outFile), { recursive: true });
   fs.writeFileSync(outFile, html);
+  refreshSwitcher(path.dirname(outFile)); // wire this page (and its siblings) into the chart switcher
   console.log(`\n${total.toLocaleString()} commits from ${displayStart} to ${rangeEnd}. Wrote ${outFile}`);
 
   if (opts.open) openInBrowser(outFile);
