@@ -459,6 +459,7 @@ function yearBands(){
 
 const granLabel={daily:'per day',weekly:'per week',monthly:'per month'};
 let g=D.defaultGranularity, topN=20, currentRange=D.defaultRange||'all', customRange=[D.rangeStart,D.rangeEnd], hashG=false;
+const hiddenRepos=new Set(); // repos toggled off via the repo-chart legend
 
 function pastRange(key){
   if(key.endsWith('y'))return [subYears(D.rangeEnd,parseInt(key)),D.rangeEnd];
@@ -529,17 +530,19 @@ function renderRepos(){
   const ranked=rankRepos(vs,ve);
   const order=ranked.slice(0,topN).map(e=>e.repo); // largest first, matches overall chart
   const topSet=new Set(order), totalRepos=ranked.length;
-  const namedY={}; order.forEach(r=>{namedY[r]=new Array(x.length).fill(null);});
-  const otherY=new Array(x.length).fill(null);
+  const segs=x.map(()=>[]); // per-bucket segments, sorted desc so each bar stacks its own biggest at the bottom
+  let anyOther=false;
   const bucketHover=new Array(x.length).fill(null); // THIS bucket's own top-N breakdown, by its counts
   perBucket.forEach((m,i)=>{
     const entries=Object.entries(m).sort((a,c)=>c[1]-a[1]); // sorted desc by THIS bucket's counts
     if(!entries.length)return;
     // Bar segments: the overall top-N repos individually; everything else aggregated into "other"
     // (keeps colors/legend stable across buckets).
-    entries.forEach(e=>{if(topSet.has(e[0]))namedY[e[0]][i]=e[1];});
+    entries.forEach(e=>{if(topSet.has(e[0])&&!hiddenRepos.has(e[0]))segs[i].push({repo:e[0],v:e[1]});});
+    segs[i].sort((a,c)=>c.v-a.v);
+    // "other" is an aggregate, not a repo: pin it on top instead of letting it compete on size.
     const overflow=entries.filter(e=>!topSet.has(e[0]));
-    if(overflow.length)otherY[i]=overflow.reduce((s,e)=>s+e[1],0);
+    if(overflow.length){anyOther=true;if(!hiddenRepos.has('other'))segs[i].push({repo:'other',v:overflow.reduce((s,e)=>s+e[1],0)});}
     // Tooltip: THIS period's own top repos by name - even ones that land in the overall
     // "other" bucket (shown with the other color but their real name) - then the remaining tail.
     // Capped at 7 regardless of the bar's top-N, so the tooltip stays compact.
@@ -550,12 +553,22 @@ function renderRepos(){
     bucketHover[i]='<b>'+x[i]+'</b><br>'+lines.join('<br>');
   });
 
-  const display=order.concat(otherY.some(v=>v!=null)?['other']:[]);
-  // largest at bottom: add in reverse display order. Named segments share the
-  // sorted per-bucket breakdown; the "other" segment shows its own tail breakdown.
-  const traces=display.slice().reverse().map(repo=>{
-    if(repo==='other')return {type:'bar',x:x,y:otherY,name:'other',marker:{color:OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
-    return {type:'bar',x:x,y:namedY[repo],name:legendLabel(repo),marker:{color:colorByRepo[repo]||OTHER_COLOR},hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'};
+  // Per-bar largest-at-bottom stacking: a fixed trace-per-repo stack can't reorder
+  // within bars, so trace k carries every bar's k-th largest segment with per-point
+  // colors. The legend comes from zero-size dummy traces (overall rank order); clicks
+  // are routed through hiddenRepos since the rank traces don't map 1:1 to repos.
+  const depth=segs.reduce((mx,s)=>Math.max(mx,s.length),0);
+  const traces=[];
+  for(let k=0;k<depth;k++){ // first trace stacks at the bottom
+    traces.push({type:'bar',x:x,y:segs.map(s=>s[k]?s[k].v:null),showlegend:false,
+      marker:{color:segs.map(s=>s[k]?(colorByRepo[s[k].repo]||OTHER_COLOR):null)},
+      hovertext:bucketHover,hovertemplate:'%{hovertext}<extra></extra>'});
+  }
+  const display=order.concat(anyOther?['other']:[]);
+  display.slice().reverse().forEach(repo=>{ // reversed + legend traceorder:'reversed' => largest on top
+    traces.push({type:'bar',x:[null],y:[null],name:repo==='other'?'other':legendLabel(repo),meta:repo,
+      visible:hiddenRepos.has(repo)?'legendonly':true,
+      marker:{color:colorByRepo[repo]||OTHER_COLOR}});
   });
   const layout=baseLayout('commits '+granLabel[g]);
   layout.barmode='stack';
@@ -566,6 +579,18 @@ function renderRepos(){
   layout.legend={font:{size:10},traceorder:'reversed',bgcolor:'transparent',itemwidth:30,x:1.0,xanchor:'left'}; // right-side, flush to the plot, scrolls when long
   layout.margin.r=125;
   Plotly.react('repo-chart',traces,layout,cfg);
+  const gd=document.getElementById('repo-chart');
+  if(!gd._legendBound){
+    gd._legendBound=true;
+    gd.on('plotly_legendclick',ev=>{
+      const r=(ev.data[ev.curveNumber]||{}).meta;
+      if(!r)return true;
+      hiddenRepos.has(r)?hiddenRepos.delete(r):hiddenRepos.add(r);
+      renderRepos();
+      return false; // default toggle only hides the dummy trace, not the repo's segments
+    });
+    gd.on('plotly_legenddoubleclick',()=>false);
+  }
 }
 
 // Overall breakdown: horizontal bars of top-N repos + Other (with % labels and Other-hover) for the visible range

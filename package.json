@@ -1,6 +1,6 @@
 {
   "name": "gh-commit-history",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Visualize your GitHub commit history across multiple years as an interactive chart, powered by gh CLI",
   "bin": {
     "gh-commit-history": "bin/cli.js"
