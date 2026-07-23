@@ -61,6 +61,14 @@ npx gh-commit-history --repo strategy-deckbuilder
 npx gh-commit-history --range 1m
 ```
 
+### Switching between charts
+
+When you've generated more than one chart (e.g. your all-repos overview plus a few `--repo` views), each page gets a **Chart:** dropdown to hop between them - no regenerating, no separate index page.
+
+![The Chart dropdown in the controls bar, switching between saved charts](assets/chart-switcher.png)
+
+Every run rescans `~/.gh-commit-history/` and refreshes the dropdown in all of your charts, so a chart you make later shows up in the ones you made earlier (regenerate older charts once to pick up the feature). The current view's range and granularity carry over when you switch. The dropdown only appears when there are two or more charts.
+
 ## Play mode
 
 Turn your contribution graph into a game:
@@ -73,11 +81,3 @@ Your green squares fall from the sky as jelly cubes, week by week - move between
 
 - **A/D**, **← →** or drag to move; **R** restarts
 - `--years <n>` limits the range; see `play --help` for the rest
-
-### Switching between charts
-
-When you've generated more than one chart (e.g. your all-repos overview plus a few `--repo` views), each page gets a **Chart:** dropdown to hop between them - no regenerating, no separate index page.
-
-![The Chart dropdown in the controls bar, switching between saved charts](assets/chart-switcher.png)
-
-Every run rescans `~/.gh-commit-history/` and refreshes the dropdown in all of your charts, so a chart you make later shows up in the ones you made earlier (regenerate older charts once to pick up the feature). The current view's range and granularity carry over when you switch. The dropdown only appears when there are two or more charts.
