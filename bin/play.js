@@ -561,7 +561,8 @@ function fmtWeek(s) {
 }
 
 function startEvent() {
-  if (G.ei >= events.length) { endGame(); return; }
+  // Out of events: let the last cubes land before showing the recap.
+  if (G.ei >= events.length) { G.state = 'drain'; return; }
   const ev = events[G.ei];
   if (ev.type === 'year') {
     G.state = 'card';
@@ -608,6 +609,9 @@ function startEvent() {
       q.t = t; prev = q.lane;
       G.spawnQ.push(q);
     }
+    // Quiet weeks spawn lower so a lone cube doesn't crawl down the whole screen.
+    const n = G.spawnQ.length;
+    G.weekSpawnY = n <= 2 ? 6.6 : n <= 4 ? 8 : SPAWN_Y;
   }
 }
 
@@ -615,11 +619,12 @@ function spawnCube(q) {
   const mat = jellyMaterial(q.red ? PENALTY : GREENS[q.level]);
   const mesh = new THREE.Mesh(cubeGeo, mat);
   const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : TALL[q.level];
-  mesh.position.set(laneX(q.lane), SPAWN_Y, 0);
+  const sy = G.weekSpawnY || SPAWN_Y;
+  mesh.position.set(laneX(q.lane), sy, 0);
   scene.add(mesh);
   const c = {
     mesh, mat, lane: q.lane, count: q.count, level: q.level, red: !!q.red, f, h,
-    y: SPAWN_Y, state: 'fall', fade: 1, t: 0,
+    week: G.curWeek, y: sy, state: 'fall', fade: 1, t: 0,
     sx: { x: 1, v: -2.5 }, sy: { x: 1, v: 6 }, sz: { x: 1, v: -2.5 },
   };
   wobble(c, 0.05);
@@ -644,7 +649,7 @@ function catchCube(c) {
   c.sy.v = -14; c.sx.v = 8; c.sz.v = 8;
   wobble(c, 0.12);
   paddleSquash.v = -6;
-  const y = weeks[G.curWeek].s.slice(0, 4);
+  const y = weeks[c.week].s.slice(0, 4); // the cube's own week - it may outlive its week event
   if (c.red) {
     G.score -= 1; G.reds++;
     G.perYear[y] = (G.perYear[y] || 0) - 1;
@@ -653,7 +658,7 @@ function catchCube(c) {
   }
   G.score += c.count; G.caught++;
   G.perYear[y] = (G.perYear[y] || 0) + c.count;
-  G.perWeekCollected[G.curWeek] += c.count;
+  G.perWeekCollected[c.week] += c.count;
   popText(c.mesh.position, '+' + c.count);
 }
 
@@ -827,9 +832,13 @@ function frame(now) {
   } else if (G.state === 'week') {
     G.weekT += dt;
     while (G.spawnQ.length && G.spawnQ[0].t <= G.weekT) spawnCube(G.spawnQ.shift());
-    if (!G.spawnQ.length && !G.cubes.some(c => c.state === 'fall') && G.weekT > 1) {
+    // Advance once everything is spawned and the stragglers are in their last
+    // stretch - the next week overlaps their landing instead of waiting it out.
+    if (!G.spawnQ.length && !G.cubes.some(c => c.state === 'fall' && c.y > 2.0) && G.weekT > 0.5) {
       G.ei++; startEvent();
     }
+  } else if (G.state === 'drain') {
+    if (!G.cubes.some(c => c.state === 'fall')) endGame();
   }
 
   // playhead easing toward target (sweeps during gap/year cards)
