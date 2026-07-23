@@ -725,7 +725,7 @@ function endGame() {
 // ---- input ---------------------------------------------------------------
 // Holding a key auto-repeats: one step on press, then a short delay, then a
 // steady march - independent of the OS key-repeat rate.
-const HOLD_DELAY = 0.32, HOLD_STEP = 0.11;
+const HOLD_DELAY = 0.18, HOLD_STEP = 0.11;
 const hold = { dir: 0, t: 0 };
 function stepLane(dir) {
   G.lane = dir < 0 ? Math.max(0, G.lane - 1) : Math.min(LANES - 1, G.lane + 1);
