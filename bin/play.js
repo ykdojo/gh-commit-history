@@ -715,7 +715,8 @@ function endGame() {
     (G.reds ? ' · -' + G.reds + ' from red cubes' : '');
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
-    const w = tot ? Math.round((got / tot) * 100) : 0;
+    // clamp: a negative width is invalid CSS and renders as a full bar
+    const w = tot ? Math.max(0, Math.min(100, Math.round((got / tot) * 100))) : 0;
     return '<div class="yrow"><span class="y">' + y + '</span><span class="bar"><i style="width:' + w +
       '%"></i></span><span class="v">' + got.toLocaleString() + ' / ' + tot.toLocaleString() + '</span></div>';
   }).join('');
