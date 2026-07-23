@@ -68,3 +68,16 @@ When you've generated more than one chart (e.g. your all-repos overview plus a f
 ![The Chart dropdown in the controls bar, switching between saved charts](assets/chart-switcher.png)
 
 Every run rescans `~/.gh-commit-history/` and refreshes the dropdown in all of your charts, so a chart you make later shows up in the ones you made earlier (regenerate older charts once to pick up the feature). The current view's range and granularity carry over when you switch. The dropdown only appears when there are two or more charts.
+
+## Play mode
+
+Turn your contribution graph into a game:
+
+```bash
+npx gh-commit-history play
+```
+
+Your green squares fall from the sky as jelly cubes, week by week - move between the seven weekday lanes to catch them, and dodge the red penalty cubes. Runs for your authenticated user, private contributions included by default.
+
+- `--exclude-private` hides private repo names
+- See `play --help` for the rest

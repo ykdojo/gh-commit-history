@@ -64,6 +64,11 @@ Usage:
 
   Defaults to your authenticated GitHub user if no username is given.
 
+Subcommands:
+  play [username]      Catch your contribution squares as they fall, week by
+                       week (uses GitHub's official contribution calendar).
+                       See: npx gh-commit-history play --help
+
 Options:
   --years <n>          Limit to the past n years (default: all history since account creation)
   --range <period>     Initial view when the page opens: 1w | 1m | 3m | 6m | 1y | 2y ... | all
@@ -787,7 +792,9 @@ function refreshSwitcher(dir) {
 // Main
 // ---------------------------------------------------------------------------
 function main() {
-  const opts = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  if (argv[0] === 'play') return require('./play').main(argv.slice(1));
+  const opts = parseArgs(argv);
   if (opts.help) { console.log(HELP); return; }
   if (!['daily', 'weekly', 'monthly'].includes(opts.granularity)) fail(`Invalid granularity: ${opts.granularity}`);
   if (opts.years !== null && (!Number.isInteger(opts.years) || opts.years < 1)) fail('--years must be a positive integer');
