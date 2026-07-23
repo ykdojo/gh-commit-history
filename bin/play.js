@@ -61,7 +61,7 @@ Controls:
   P                    Pause
   R                    Replay
 
-Red penalty boxes drop on empty days (up to two a week) - catching one costs
+Red penalty cubes drop on empty days (up to two a week) - catching one costs
 a point.
 `;
 
@@ -690,7 +690,7 @@ function endGame() {
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
     G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected' +
-    (G.reds ? ' · -' + G.reds + ' from reds' : '');
+    (G.reds ? ' · -' + G.reds + ' from red cubes' : '');
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
     const w = tot ? Math.round((got / tot) * 100) : 0;
