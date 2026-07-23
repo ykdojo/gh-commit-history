@@ -310,6 +310,12 @@ function renderHTML(payload) {
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
   kbd { background:var(--panel); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
     padding:0 5px; font-size:11px; color:var(--text); }
+  #menubtn { right:20px; font-size:12px; color:var(--dim); cursor:pointer; text-align:right;
+    background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
+  #menu { right:20px; display:none; font-size:12px; color:var(--dim); text-align:right;
+    background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:4px 0; }
+  #menu .mi { padding:8px 16px; cursor:pointer; white-space:nowrap; }
+  #menu .mi:hover { color:var(--text); background:#1c2530; }
   #card { top:34%; left:50%; transform:translate(-50%,-50%) scale(.95); text-align:center; opacity:0;
     transition:opacity .3s, transform .3s; pointer-events:none; }
   #card.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
@@ -344,6 +350,8 @@ function renderHTML(payload) {
     #score .sub { font-size:10px; }
     #weeklabel { font-size:12px; padding:6px 10px; white-space:nowrap; }
     #keys { top:10px; right:10px; font-size:10px; padding:6px 10px; }
+    #menubtn { right:10px; font-size:10px; padding:6px 10px; }
+    #menu { right:10px; font-size:10px; }
     #card .big { font-size:42px; }
     #card .sub { font-size:13px; }
     #card .tag { font-size:13px; }
@@ -357,6 +365,8 @@ function renderHTML(payload) {
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
 <div class="hud" id="keys"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</div>
+<div class="hud" id="menubtn">☰ menu</div>
+<div class="hud" id="menu"><div class="mi" id="menuEnd">skip to recap</div><div class="mi" id="menuRestart">restart</div></div>
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
 <div id="end"><div class="panel">
@@ -738,7 +748,7 @@ function laneFromClientX(cx) {
 }
 let drag = null;
 addEventListener('pointerdown', e => {
-  if (G.state === 'end' || (e.target.closest && e.target.closest('#end'))) return;
+  if (G.state === 'end' || (e.target.closest && e.target.closest('#end, #menubtn, #menu'))) return;
   drag = { x0: e.clientX, moved: false };
 });
 addEventListener('pointermove', e => {
@@ -764,6 +774,18 @@ addEventListener('pointerup', e => {
   }
 });
 document.getElementById('replay').addEventListener('click', () => location.reload());
+
+// menu: quick jump to the recap, or restart
+const menuBtn = document.getElementById('menubtn'), menuPanel = document.getElementById('menu');
+menuBtn.addEventListener('click', () => {
+  menuPanel.style.display = menuPanel.style.display === 'block' ? 'none' : 'block';
+});
+document.getElementById('menuEnd').addEventListener('click', () => { menuPanel.style.display = 'none'; endGame(); });
+document.getElementById('menuRestart').addEventListener('click', () => location.reload());
+function placeMenu() {
+  menuBtn.style.top = (document.getElementById('keys').getBoundingClientRect().bottom + 8) + 'px';
+  menuPanel.style.top = (menuBtn.getBoundingClientRect().bottom + 8) + 'px';
+}
 
 // autopilot (testing/demo): hop toward the closest green cube, dodge reds
 let apCool = 0;
@@ -844,6 +866,7 @@ function resize() {
   camera.fov = Math.min(100, Math.max(55, v));
   camera.updateProjectionMatrix();
   computeLaneScreen();
+  placeMenu();
 }
 addEventListener('resize', resize);
 resize();
