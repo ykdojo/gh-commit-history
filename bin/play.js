@@ -748,9 +748,14 @@ addEventListener('pointerup', e => {
   const wasTap = !drag.moved;
   drag = null;
   if (wasTap && G.state !== 'end') {
-    // A tap in a column jumps straight to it; beyond the outer lanes it steps by one.
+    // A tap in a column jumps straight to it. Just past the outer lanes it snaps
+    // to the edge lane (near-misses shouldn't read as "step one"); only clearly
+    // far-out taps step by one.
+    const SNAP = 1.5; // lane-widths past the board edge that still snap
     const t = laneT(e.clientX);
     if (t >= -0.5 && t <= LANES - 0.5) G.lane = laneFromClientX(e.clientX);
+    else if (t >= -0.5 - SNAP && t < -0.5) G.lane = 0;
+    else if (t > LANES - 0.5 && t <= LANES - 0.5 + SNAP) G.lane = LANES - 1;
     else if (t < -0.5) G.lane = Math.max(0, G.lane - 1);
     else G.lane = Math.min(LANES - 1, G.lane + 1);
   }
