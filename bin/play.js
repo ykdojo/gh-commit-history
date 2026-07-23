@@ -394,7 +394,7 @@ const AUTOPILOT = params.get('autopilot') === '1';
 
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
-const SPAWN_Y = 9.2, FALL_SPEED = 3.4, PADDLE_TOP = 0.58;
+const SPAWN_Y = 10.4, FALL_SPEED = 3.4, PADDLE_TOP = 0.58;
 const PENALTY = '#a40e26'; // deep crimson penalty cubes - dark but unmissable
 const SPAWN_BASE = 0.26, SPAWN_PER_LANE = 0.08; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
@@ -619,7 +619,7 @@ function startEvent() {
     }
     // Quiet weeks spawn lower so a lone cube doesn't crawl down the whole screen.
     const n = G.spawnQ.length;
-    G.weekSpawnY = n <= 2 ? 6.6 : n <= 4 ? 8 : SPAWN_Y;
+    G.weekSpawnY = n <= 2 ? 7.5 : n <= 4 ? 9 : SPAWN_Y;
   }
 }
 
