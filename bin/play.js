@@ -58,9 +58,10 @@ Options:
 
 Controls:
   A/D or arrow keys    Step between the 7 weekday lanes
-  F (hold)             Fast-forward
   P                    Pause
-  R                    Replay (on the end screen)
+  R                    Replay
+
+Red boxes drop on empty days (up to two a week) - catching one costs a point.
 `;
 
 function parseArgs(argv) {
@@ -283,6 +284,7 @@ function renderHTML(payload) {
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #weeklabel:empty { display:none; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
   kbd { background:var(--panel); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
@@ -308,6 +310,7 @@ function renderHTML(payload) {
   #end .replay { margin-top:20px; text-align:center; color:var(--dim); font-size:13px; }
   .pop { position:fixed; z-index:15; font-weight:700; color:var(--green); font-size:18px; pointer-events:none;
     text-shadow:0 1px 6px rgba(0,0,0,.6); animation:rise .8s ease-out forwards; }
+  .pop.bad { color:#f85149; }
   @keyframes rise { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(-46px); } }
   #boot { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; color:var(--dim);
     font-size:14px; z-index:5; }
@@ -329,7 +332,7 @@ function renderHTML(payload) {
 <canvas id="scene"></canvas>
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
-<div class="hud" id="keys"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>F</kbd> fast-forward · <kbd>P</kbd> pause</div>
+<div class="hud" id="keys"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</div>
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div></div>
 <canvas id="timeline"></canvas>
 <div id="end"><div class="panel">
@@ -367,7 +370,8 @@ const AUTOPILOT = params.get('autopilot') === '1';
 
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
-const SPAWN_Y = 9.2, FALL_SPEED = 3.05, PADDLE_TOP = 0.58;
+const SPAWN_Y = 9.2, FALL_SPEED = 2.85, PADDLE_TOP = 0.58;
+const RED = '#da3633'; // penalty cubes on empty days
 const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -485,13 +489,13 @@ const G = {
   weekT: 0,
   cubes: [],
   lane: 3,
-  score: 0, caught: 0, missed: 0,
+  score: 0, caught: 0, missed: 0, reds: 0,
   perYear: {},         // year -> collected
   perWeekCollected: new Array(weeks.length).fill(0),
   playhead: 0,         // week index (fractional) for the timeline strip
   playheadTarget: 0,
   curWeek: -1,
-  ff: false, paused: false,
+  paused: false,
   displayScore: 0,
   done: false,
 };
@@ -542,6 +546,18 @@ function startEvent() {
     weekLabel.innerHTML = fmtWeek(w.s) +
       (w.r && w.r.length ? '<small>' + w.r.join(' · ') + '</small>' : '');
     active.sort((a, b) => a.count - b.count || a.day - b.day);
+    // Penalty cubes: up to two random empty days drop red boxes, mixed into the
+    // order at random. Catching one costs a point.
+    const empty = [];
+    w.d.forEach(([count], day) => { if (count === 0) empty.push(day); });
+    for (let i = empty.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [empty[i], empty[j]] = [empty[j], empty[i]];
+    }
+    for (const day of empty.slice(0, 2)) {
+      const pos = Math.floor(Math.random() * (active.length + 1));
+      active.splice(pos, 0, { t: 0, lane: day, count: 0, level: 0, day, red: true });
+    }
     let t = 0, prev = null;
     for (const q of active) {
       if (prev !== null) t += SPAWN_BASE + SPAWN_PER_LANE * Math.abs(q.lane - prev);
@@ -552,13 +568,13 @@ function startEvent() {
 }
 
 function spawnCube(q) {
-  const mat = jellyMaterial(GREENS[q.level]);
+  const mat = jellyMaterial(q.red ? RED : GREENS[q.level]);
   const mesh = new THREE.Mesh(cubeGeo, mat);
-  const f = FOOT[q.level], h = TALL[q.level];
+  const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : TALL[q.level];
   mesh.position.set(laneX(q.lane), SPAWN_Y, 0);
   scene.add(mesh);
   const c = {
-    mesh, mat, lane: q.lane, count: q.count, level: q.level, f, h,
+    mesh, mat, lane: q.lane, count: q.count, level: q.level, red: !!q.red, f, h,
     y: SPAWN_Y, state: 'fall', fade: 1, t: 0,
     sx: { x: 1, v: -2.5 }, sy: { x: 1, v: 6 }, sz: { x: 1, v: -2.5 },
   };
@@ -568,10 +584,10 @@ function spawnCube(q) {
 
 function wobble(c, amp) { c.mat.userData.uT.value = 0; c.mat.userData.uAmp.value = amp; }
 
-function popText(worldPos, text) {
+function popText(worldPos, text, bad) {
   const v = worldPos.clone().project(camera);
   const el = document.createElement('div');
-  el.className = 'pop';
+  el.className = bad ? 'pop bad' : 'pop';
   el.textContent = text;
   el.style.left = ((v.x * 0.5 + 0.5) * innerWidth - 14) + 'px';
   el.style.top = ((-v.y * 0.5 + 0.5) * innerHeight - 30) + 'px';
@@ -584,8 +600,14 @@ function catchCube(c) {
   c.sy.v = -14; c.sx.v = 8; c.sz.v = 8;
   wobble(c, 0.12);
   paddleSquash.v = -6;
-  G.score += c.count; G.caught++;
   const y = weeks[G.curWeek].s.slice(0, 4);
+  if (c.red) {
+    G.score = Math.max(0, G.score - 1); G.reds++;
+    G.perYear[y] = Math.max(0, (G.perYear[y] || 0) - 1);
+    popText(c.mesh.position, '-1', true);
+    return;
+  }
+  G.score += c.count; G.caught++;
   G.perYear[y] = (G.perYear[y] || 0) + c.count;
   G.perWeekCollected[G.curWeek] += c.count;
   popText(c.mesh.position, '+' + c.count);
@@ -595,7 +617,7 @@ function missCube(c) {
   c.state = 'missed'; c.t = 0;
   c.sy.v = -10; c.sx.v = 5; c.sz.v = 5;
   wobble(c, 0.09);
-  G.missed++;
+  if (!c.red) G.missed++; // letting a red one splat is the point
   c.mat.color.set('#484f58');
   c.mat.emissiveIntensity = 0;
 }
@@ -608,7 +630,8 @@ function endGame() {
   document.getElementById('endTitle').textContent = D.login + "'s contribution catch";
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
-    G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected';
+    G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected' +
+    (G.reds ? ' · -' + G.reds + ' from red boxes' : '');
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
     const w = tot ? Math.round((got / tot) * 100) : 0;
@@ -625,11 +648,9 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'a' || k === 'arrowleft') G.lane = Math.max(0, G.lane - 1);
   else if (k === 'd' || k === 'arrowright') G.lane = Math.min(LANES - 1, G.lane + 1);
-  else if (k === 'f') G.ff = true;
   else if (k === 'p') G.paused = !G.paused;
-  else if (k === 'r' && G.state === 'end') location.reload();
+  else if (k === 'r') location.reload();
 });
-addEventListener('keyup', e => { if (e.key.toLowerCase() === 'f') G.ff = false; });
 
 // touch / click: tap the left or right half of the screen to step between lanes
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -642,14 +663,16 @@ addEventListener('pointerdown', e => {
 });
 document.getElementById('replay').addEventListener('click', () => location.reload());
 
-// autopilot (testing/demo): hop toward the cube closest to the paddle
+// autopilot (testing/demo): hop toward the closest green cube, dodge reds
 let apCool = 0;
 function autopilot(dt) {
   apCool -= dt;
   if (apCool > 0) return;
   let target = null, bestY = Infinity;
-  for (const c of G.cubes) if (c.state === 'fall' && c.y < bestY) { bestY = c.y; target = c.lane; }
-  if (target === null && G.spawnQ.length) target = G.spawnQ[0].lane;
+  for (const c of G.cubes) if (c.state === 'fall' && !c.red && c.y < bestY) { bestY = c.y; target = c.lane; }
+  if (target === null) { const nq = G.spawnQ.find(q => !q.red); if (nq) target = nq.lane; }
+  const danger = G.cubes.some(c => c.state === 'fall' && c.red && c.lane === G.lane && c.y < PADDLE_TOP + 2.5);
+  if (danger && (target === null || target === G.lane)) target = G.lane + (G.lane < LANES - 1 ? 1 : -1);
   if (target === null || target === G.lane) return;
   G.lane += Math.sign(target - G.lane);
   apCool = 0.09;
@@ -728,7 +751,7 @@ function frame(now) {
   let dt = Math.min((now - last) / 1000, 0.05);
   last = now;
   if (G.paused) { renderer.render(scene, camera); return; }
-  dt *= URL_SPEED * (G.ff ? 3 : 1);
+  dt *= URL_SPEED;
 
   if (AUTOPILOT && G.state === 'week') autopilot(dt);
 
@@ -810,7 +833,7 @@ requestAnimationFrame(frame);
 // test/debug handle
 window.__play = {
   get score() { return G.score; }, get state() { return G.state; },
-  get caught() { return G.caught; }, get missed() { return G.missed; },
+  get caught() { return G.caught; }, get missed() { return G.missed; }, get reds() { return G.reds; },
   get lane() { return G.lane; }, set lane(v) { G.lane = v; },
   get eventIndex() { return G.ei; }, events, weeks, grandTotal,
 };
