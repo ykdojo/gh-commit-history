@@ -44,9 +44,10 @@ const HELP = `
 gh-commit-history play - catch your contribution squares as they fall
 
 Usage:
-  npx gh-commit-history play [username] [options]
+  npx gh-commit-history play [options]
 
-  Defaults to your authenticated GitHub user. Uses GitHub's official
+  Always runs for your authenticated GitHub user - that's the only account
+  whose private-repo activity the API will itemize. Uses GitHub's official
   contribution calendar (the profile green squares), fetched via gh.
 
 Options:
@@ -75,7 +76,7 @@ function parseArgs(argv) {
     else if (a === '--no-open') opts.open = false;
     else if (a === '--no-cache') opts.cache = false;
     else if (a.startsWith('-')) fail(`Unknown option: ${a}`);
-    else opts.username = a.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+    else fail('play always runs for your authenticated user - it cannot itemize private-repo activity for anyone else. Use `gh auth login` to switch accounts.');
   }
   return opts;
 }
