@@ -869,8 +869,9 @@ function frame(now) {
   paddle.position.x += paddleSpring.v * dt;
   spring(paddleSquash, dt, 160, 10);
   paddleMat.userData.uT.value += dt;
-  paddle.scale.set(2 - Math.min(paddleSquash.x, 1.4), Math.max(0.3, paddleSquash.x), 2 - Math.min(paddleSquash.x, 1.4));
-  paddle.scale.x = Math.max(0.6, Math.min(paddle.scale.x, 1.5));
+  const spread = 1 + (1 - Math.min(paddleSquash.x, 1.4)) * 0.45;
+  paddle.scale.set(spread, Math.max(0.3, paddleSquash.x), spread);
+  paddle.scale.x = Math.max(0.85, Math.min(paddle.scale.x, 1.2));
   paddle.scale.z = paddle.scale.x;
   for (let i = 0; i < LANES; i++) {
     laneMats[i].color.set(i === G.lane ? '#1c2530' : '#161b22');
