@@ -110,6 +110,44 @@ function fetchYear(login, year, toDate) {
   return days;
 }
 
+const REPO_QUERY = `query($login:String!,$from:DateTime!,$to:DateTime!){
+  user(login:$login){
+    contributionsCollection(from:$from,to:$to){
+      commitContributionsByRepository(maxRepositories:100){
+        repository{ nameWithOwner }
+        contributions(first:100){ nodes{ occurredAt commitCount } }
+      }
+    }
+  }
+}`;
+
+function quarterOf(dateStr) { const m = +dateStr.slice(5, 7); return dateStr.slice(0, 4) + '-Q' + (Math.floor((m - 1) / 3) + 1); }
+
+function quarterRange(q) {
+  const y = +q.slice(0, 4), sm = (+q.slice(6) - 1) * 3 + 1, em = sm + 2;
+  const lastDay = new Date(Date.UTC(y, em, 0)).getUTCDate();
+  return [
+    `${y}-${String(sm).padStart(2, '0')}-01T00:00:00Z`,
+    `${y}-${String(em).padStart(2, '0')}-${lastDay}T23:59:59Z`,
+  ];
+}
+
+// Per-week top repos come from commit contributions, quarter by quarter: a repo has at
+// most one contribution node per day, so a <=92-day window never needs pagination.
+function fetchQuarter(login, q) {
+  const [from, to] = quarterRange(q);
+  const raw = gh(['api', 'graphql', '-f', `query=${REPO_QUERY}`, '-f', `login=${login}`, '-f', `from=${from}`, '-f', `to=${to}`]);
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { fail(`Unexpected GraphQL response for ${q}.`); }
+  const byRepo = parsed?.data?.user?.contributionsCollection?.commitContributionsByRepository || [];
+  const entries = []; // [date, repo, commits]
+  for (const r of byRepo) {
+    const name = r.repository.nameWithOwner;
+    for (const n of r.contributions.nodes) entries.push([n.occurredAt.slice(0, 10), name, n.commitCount]);
+  }
+  return entries;
+}
+
 function cachePath(login) { return path.join(CACHE_DIR, `${login}-play.json`); }
 
 function fetchCalendar(login, opts) {
@@ -156,7 +194,32 @@ function fetchCalendar(login, opts) {
       dayMap.set(date, [count, level]);
     }
   }
-  return dayMap;
+
+  // Per-week top repos: commit contributions for every quarter with activity.
+  const qSet = new Set();
+  for (const [date, [count]] of dayMap) if (count > 0) qSet.add(quarterOf(date));
+  const quarters = [...qSet].sort();
+  const nowQ = quarterOf(now.toISOString().slice(0, 10));
+  cache.repoQuarters = cache.repoQuarters || {};
+  const repoDay = []; // [date, repo, commits]
+  let fetched = 0;
+  for (const q of quarters) {
+    let entries = q !== nowQ && opts.cache ? cache.repoQuarters[q] : null;
+    if (!entries) {
+      if (!fetched) process.stdout.write('  top repos: ');
+      entries = fetchQuarter(login, q);
+      cache.repoQuarters[q] = entries;
+      fetched++;
+      process.stdout.write('.');
+      if (opts.cache) {
+        fs.mkdirSync(CACHE_DIR, { recursive: true });
+        fs.writeFileSync(cachePath(login), JSON.stringify(cache));
+      }
+    }
+    repoDay.push(...entries);
+  }
+  if (fetched) console.log(` ${fetched} quarter(s) fetched`);
+  return { dayMap, repoDay };
 }
 
 // ---------------------------------------------------------------------------
@@ -216,7 +279,10 @@ function renderHTML(payload) {
     font-variant-numeric:tabular-nums; }
   #score .sub { font-size:12px; color:var(--dim); margin-top:2px; }
   #weeklabel { top:18px; left:50%; transform:translateX(-50%); font-size:14px; color:var(--dim);
-    background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
+    background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px;
+    text-align:center; }
+  #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
   kbd { background:var(--panel); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
@@ -301,7 +367,8 @@ const AUTOPILOT = params.get('autopilot') === '1';
 
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
-const SPAWN_Y = 9.2, FALL_SPEED = 3.3, PADDLE_TOP = 0.58, STAGGER = 0.34;
+const SPAWN_Y = 9.2, FALL_SPEED = 3.05, PADDLE_TOP = 0.58;
+const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -343,10 +410,12 @@ try {
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 const scene = new THREE.Scene();
 scene.background = new THREE.Color('#0d1117');
-scene.fog = new THREE.Fog('#0d1117', 16, 30);
+scene.fog = new THREE.Fog('#0d1117', 12, 24);
+// Nearly head-on framing: the game happens on one line of lanes, so the camera
+// looks at that plane with just enough tilt to show cube tops - no deep corridor.
 const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 60);
-camera.position.set(0, 4.7, 10.6);
-camera.lookAt(0, 3.4, 0);
+camera.position.set(0, 4.2, 11.2);
+camera.lookAt(0, 3.6, 0);
 
 scene.add(new THREE.AmbientLight('#b8c4d0', 0.75));
 const key = new THREE.DirectionalLight('#ffffff', 1.9);
@@ -356,9 +425,9 @@ const rim = new THREE.DirectionalLight('#58a6ff', 0.5);
 rim.position.set(-6, 4, -4);
 scene.add(rim);
 
-// floor + lane guides
+// a shallow platform under the play line instead of a deep receding floor
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(40, 24),
+  new THREE.PlaneGeometry(40, 6),
   new THREE.MeshStandardMaterial({ color: '#10151c', roughness: 0.95 })
 );
 floor.rotation.x = -Math.PI / 2;
@@ -366,9 +435,9 @@ scene.add(floor);
 const laneMats = [];
 for (let i = 0; i < LANES; i++) {
   const m = new THREE.MeshBasicMaterial({ color: '#161b22', transparent: true, opacity: 0.6 });
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 24), m);
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 5), m);
   strip.rotation.x = -Math.PI / 2;
-  strip.position.set(laneX(i), 0.01, -1);
+  strip.position.set(laneX(i), 0.01, 0);
   scene.add(strip);
   laneMats.push(m);
 }
@@ -464,10 +533,21 @@ function startEvent() {
     G.weekT = 0;
     G.spawnQ = [];
     const w = weeks[ev.week];
+    // Each week drops its smallest days first, building to the biggest; spacing
+    // scales with the lane distance from the previous cube so jumps stay catchable.
+    const active = [];
     w.d.forEach(([count, level], day) => {
-      if (count > 0) G.spawnQ.push({ t: day * STAGGER, lane: day, count, level, day });
+      if (count > 0) active.push({ t: 0, lane: day, count, level, day });
     });
-    weekLabel.textContent = fmtWeek(w.s);
+    weekLabel.innerHTML = fmtWeek(w.s) +
+      (w.r && w.r.length ? '<small>' + w.r.join(' · ') + '</small>' : '');
+    active.sort((a, b) => a.count - b.count || a.day - b.day);
+    let t = 0, prev = null;
+    for (const q of active) {
+      if (prev !== null) t += SPAWN_BASE + SPAWN_PER_LANE * Math.abs(q.lane - prev);
+      q.t = t; prev = q.lane;
+      G.spawnQ.push(q);
+    }
   }
 }
 
@@ -746,10 +826,22 @@ function main(argv) {
   if (opts.help) { console.log(HELP); return; }
   const login = resolveUsername(opts.username);
   console.log(`Fetching contribution calendar for ${login}…`);
-  const dayMap = fetchCalendar(login, opts);
+  const { dayMap, repoDay } = fetchCalendar(login, opts);
   const built = buildWeeks(dayMap);
   if (!built) fail(`No contributions found for ${login}.`);
   const { weeks, yearStats } = built;
+
+  // Attach each week's top repos (by commits) for the in-game label.
+  const byWeek = {};
+  for (const [date, repo, commits] of repoDay) {
+    const ws = weekStart(date);
+    (byWeek[ws] = byWeek[ws] || {})[repo] = (byWeek[ws][repo] || 0) + commits;
+  }
+  const shortName = r => r.toLowerCase().startsWith(login.toLowerCase() + '/') ? r.slice(login.length + 1) : r;
+  for (const w of weeks) {
+    const m = byWeek[w.s];
+    if (m) w.r = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r]) => shortName(r));
+  }
   const grandTotal = Object.values(yearStats).reduce((a, y) => a + y.total, 0);
 
   const html = renderHTML({ login, weeks, years: yearStats });

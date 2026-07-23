@@ -69,7 +69,7 @@ Turn your contribution graph into a game:
 npx gh-commit-history play [username]
 ```
 
-Your green squares fall from the sky as jelly cubes, week by week (Sunday on the left, Saturday on the right - taller and greener means more contributions that day). Step between the seven weekday lanes to catch them. Quiet stretches are skipped with a note like "12 quiet weeks", each year opens with how many weeks you were active, and a timeline of your whole history runs along the bottom with a playhead showing where you are.
+Your green squares fall from the sky as jelly cubes, week by week, smallest days first (each day falls in its weekday lane - Sunday on the left, Saturday on the right; taller and greener means more contributions that day). Each week's label shows your top repos that week, by commits. Step between the seven weekday lanes to catch them. Quiet stretches are skipped with a note like "12 quiet weeks", each year opens with how many weeks you were active, and a timeline of your whole history runs along the bottom with a playhead showing where you are.
 
 Unlike the chart, play mode uses GitHub's official contribution calendar (the profile green squares), fetched year by year - so the first run is fast, no long commit-search fetch.
 
