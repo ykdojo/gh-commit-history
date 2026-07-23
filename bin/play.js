@@ -532,15 +532,16 @@ const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
 sparks.frustumCulled = false;
 scene.add(sparks);
 let sparkI = 0, sparkAcc = 0;
-// one gentle spark drifting up off the paddle - the continuous reward emitter
-function emitSpark(x, spread) {
+// One gentle spark off the paddle - always spawns on the paddle's own
+// footprint; cone (0..1) widens the launch angles, not the spawn area.
+function emitSpark(x, cone) {
   const i = sparkI = (sparkI + 1) % SPARK_N;
-  sparkPos[i * 3] = x + (Math.random() - 0.5) * spread;
+  sparkPos[i * 3] = x + (Math.random() - 0.5) * 0.9;
   sparkPos[i * 3 + 1] = PADDLE_TOP + 0.05;
-  sparkPos[i * 3 + 2] = (Math.random() - 0.5) * Math.min(spread, 1.1);
-  sparkVel[i * 3] = (Math.random() - 0.5) * 0.5;
-  sparkVel[i * 3 + 1] = 0.9 + Math.random() * 0.9;
-  sparkVel[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
+  sparkPos[i * 3 + 2] = (Math.random() - 0.5) * 0.9;
+  sparkVel[i * 3] = (Math.random() - 0.5) * (0.5 + 2.6 * cone);
+  sparkVel[i * 3 + 1] = 1.0 + Math.random() * 1.0;
+  sparkVel[i * 3 + 2] = (Math.random() - 0.5) * (0.5 + 1.4 * cone);
   sparkLife[i] = 0.6 + Math.random() * 0.4;
 }
 const paddleSpring = { x: 0, v: 0 }; // horizontal glide
@@ -978,18 +979,18 @@ function frame(now) {
   // Streak glow eases toward green as greens stack up (full at 10); a drop or
   // a red snaps the streak and the paddle fades back. At a full streak the
   // paddle shimmers and sheds a steady drift of sparks - the earned reward.
-  G.glow += (Math.min(1, G.streak / 10) - G.glow) * Math.min(1, dt * 4);
+  G.glow += (Math.min(1, G.streak / 5) - G.glow) * Math.min(1, dt * 4);
   paddleMat.color.copy(PADDLE_BLUE).lerp(STREAK_GREEN, G.glow);
   paddleMat.emissive.copy(PADDLE_GLOW).lerp(STREAK_GLOW, G.glow);
-  // sparks start as a trickle at a streak of 5 and grow into a wider, denser
-  // fountain the longer the streak runs
+  // sparks start as a trickle at a streak of 5 (paddle is fully green by then)
+  // and grow denser with wider launch angles the longer the streak runs
   const reward = Math.max(0, G.streak - 4);
   const rate = Math.min(32, reward * 3);
-  const sparkSpread = Math.min(2.4, 0.8 + reward * 0.12);
+  const sparkCone = Math.min(1, reward / 12);
   paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow +
     (reward ? 0.18 * Math.min(1, reward / 6) * (0.5 + 0.5 * Math.sin(now * 0.007)) : 0);
   sparkAcc += dt * rate;
-  while (sparkAcc >= 1) { sparkAcc -= 1; emitSpark(paddle.position.x, sparkSpread); }
+  while (sparkAcc >= 1) { sparkAcc -= 1; emitSpark(paddle.position.x, sparkCone); }
   let sparkAlive = false;
   for (let i = 0; i < SPARK_N; i++) {
     if (sparkLife[i] <= 0) continue;
