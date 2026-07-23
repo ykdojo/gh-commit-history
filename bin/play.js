@@ -723,13 +723,26 @@ function endGame() {
 }
 
 // ---- input ---------------------------------------------------------------
+// Holding a key auto-repeats: one step on press, then a short delay, then a
+// steady march - independent of the OS key-repeat rate.
+const HOLD_DELAY = 0.32, HOLD_STEP = 0.11;
+const hold = { dir: 0, t: 0 };
+function stepLane(dir) {
+  G.lane = dir < 0 ? Math.max(0, G.lane - 1) : Math.min(LANES - 1, G.lane + 1);
+}
 addEventListener('keydown', e => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
-  if (k === 'a' || k === 'arrowleft') G.lane = Math.max(0, G.lane - 1);
-  else if (k === 'd' || k === 'arrowright') G.lane = Math.min(LANES - 1, G.lane + 1);
+  if (k === 'a' || k === 'arrowleft') { stepLane(-1); hold.dir = -1; hold.t = HOLD_DELAY; }
+  else if (k === 'd' || k === 'arrowright') { stepLane(1); hold.dir = 1; hold.t = HOLD_DELAY; }
   else if (k === 'r') location.reload();
 });
+addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if ((k === 'a' || k === 'arrowleft') && hold.dir === -1) hold.dir = 0;
+  else if ((k === 'd' || k === 'arrowright') && hold.dir === 1) hold.dir = 0;
+});
+addEventListener('blur', () => { hold.dir = 0; });
 
 // touch / click: tap the left or right half to step, or drag to steer directly
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
@@ -885,6 +898,11 @@ function frame(now) {
   requestAnimationFrame(frame);
   let dt = Math.min((now - last) / 1000, 0.05);
   last = now;
+  // held-key auto-repeat runs on real time, not game speed
+  if (hold.dir) {
+    hold.t -= dt;
+    if (hold.t <= 0) { hold.t = HOLD_STEP; stepLane(hold.dir); }
+  }
   dt *= URL_SPEED;
 
   if (AUTOPILOT && G.state === 'week') autopilot(dt);
