@@ -303,7 +303,7 @@ function renderHTML(payload) {
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px;
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    line-height:1.5; }
   #weeklabel small.priv { color:var(--dim); }
   #weeklabel:empty { display:none; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
@@ -348,7 +348,7 @@ function renderHTML(payload) {
     #score { top:10px; left:10px; padding:7px 12px; }
     #score .n { font-size:22px; }
     #score .sub { font-size:10px; }
-    #weeklabel { font-size:12px; padding:6px 10px; white-space:nowrap; }
+    #weeklabel { font-size:12px; padding:6px 10px; }
     #keys { top:10px; right:10px; font-size:10px; padding:6px 10px; }
     #keys .menulink { font-size:12px; }
     #menu { right:10px; font-size:10px; }
