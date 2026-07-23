@@ -363,7 +363,7 @@ function renderHTML(payload) {
 <canvas id="scene"></canvas>
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
-<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> <kbd>←</kbd> <kbd>→</kbd> or drag to move</span><div class="menulink" id="menubtn">☰</div></div>
+<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd>, <kbd>←</kbd> <kbd>→</kbd> or drag to move</span><div class="menulink" id="menubtn">☰</div></div>
 <div class="hud" id="menu"><div class="mi" id="menuEnd">skip to recap</div><div class="mi" id="menuRestart">restart</div></div>
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
@@ -725,7 +725,7 @@ function endGame() {
 // ---- input ---------------------------------------------------------------
 // Holding a key auto-repeats: one step on press, then a short delay, then a
 // steady march - independent of the OS key-repeat rate.
-const HOLD_DELAY = 0.18, HOLD_STEP = 0.11;
+const HOLD_DELAY = 0.12, HOLD_STEP = 0.11;
 const hold = { dir: 0, t: 0 };
 function stepLane(dir) {
   G.lane = dir < 0 ? Math.max(0, G.lane - 1) : Math.min(LANES - 1, G.lane + 1);
