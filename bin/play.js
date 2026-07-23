@@ -119,6 +119,18 @@ const REPO_QUERY = `query($login:String!,$from:DateTime!,$to:DateTime!){
         repository{ nameWithOwner }
         contributions(first:100){ nodes{ occurredAt commitCount } }
       }
+      issueContributionsByRepository(maxRepositories:100){
+        repository{ nameWithOwner }
+        contributions(first:100){ nodes{ occurredAt } }
+      }
+      pullRequestContributionsByRepository(maxRepositories:100){
+        repository{ nameWithOwner }
+        contributions(first:100){ nodes{ occurredAt } }
+      }
+      pullRequestReviewContributionsByRepository(maxRepositories:100){
+        repository{ nameWithOwner }
+        contributions(first:100){ nodes{ occurredAt } }
+      }
     }
   }
 }`;
@@ -134,18 +146,24 @@ function quarterRange(q) {
   ];
 }
 
-// Per-week top repos come from commit contributions, quarter by quarter: a repo has at
-// most one contribution node per day, so a <=92-day window never needs pagination.
+// Per-week top repos, quarter by quarter, across commits + issues + PRs + reviews
+// (the same types the contribution calendar counts, minus restricted/private-org
+// activity the API won't itemize). Commit nodes are per-day so a <=92-day window
+// never paginates; issue/PR/review nodes are per-item, capped at 100 per repo per
+// quarter, which at worst slightly undercounts a monster repo's tail.
 function fetchQuarter(login, q) {
   const [from, to] = quarterRange(q);
   const raw = gh(['api', 'graphql', '-f', `query=${REPO_QUERY}`, '-f', `login=${login}`, '-f', `from=${from}`, '-f', `to=${to}`]);
   let parsed;
   try { parsed = JSON.parse(raw); } catch { fail(`Unexpected GraphQL response for ${q}.`); }
-  const byRepo = parsed?.data?.user?.contributionsCollection?.commitContributionsByRepository || [];
-  const entries = []; // [date, repo, commits]
-  for (const r of byRepo) {
-    const name = r.repository.nameWithOwner;
-    for (const n of r.contributions.nodes) entries.push([n.occurredAt.slice(0, 10), name, n.commitCount]);
+  const col = parsed?.data?.user?.contributionsCollection || {};
+  const entries = []; // [date, repo, contributions]
+  for (const key of ['commitContributionsByRepository', 'issueContributionsByRepository',
+    'pullRequestContributionsByRepository', 'pullRequestReviewContributionsByRepository']) {
+    for (const r of col[key] || []) {
+      const name = r.repository.nameWithOwner;
+      for (const n of r.contributions.nodes) entries.push([n.occurredAt.slice(0, 10), name, n.commitCount || 1]);
+    }
   }
   return entries;
 }
@@ -202,15 +220,16 @@ function fetchCalendar(login, opts) {
   for (const [date, [count]] of dayMap) if (count > 0) qSet.add(quarterOf(date));
   const quarters = [...qSet].sort();
   const nowQ = quarterOf(now.toISOString().slice(0, 10));
-  cache.repoQuarters = cache.repoQuarters || {};
-  const repoDay = []; // [date, repo, commits]
+  // repoQuarters2: v2 includes issues/PRs/reviews, not just commits
+  cache.repoQuarters2 = cache.repoQuarters2 || {};
+  const repoDay = []; // [date, repo, contributions]
   let fetched = 0;
   for (const q of quarters) {
-    let entries = q !== nowQ && opts.cache ? cache.repoQuarters[q] : null;
+    let entries = q !== nowQ && opts.cache ? cache.repoQuarters2[q] : null;
     if (!entries) {
       if (!fetched) process.stdout.write('  top repos: ');
       entries = fetchQuarter(login, q);
-      cache.repoQuarters[q] = entries;
+      cache.repoQuarters2[q] = entries;
       fetched++;
       process.stdout.write('.');
       if (opts.cache) {
@@ -285,6 +304,7 @@ function renderHTML(payload) {
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #weeklabel small .pfx, #weeklabel small.priv { color:var(--dim); }
   #weeklabel:empty { display:none; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
@@ -566,7 +586,9 @@ function startEvent() {
       if (count > 0) active.push({ t: 0, lane: day, count, level, day });
     });
     weekLabel.innerHTML = fmtWeek(w.s) +
-      (w.r && w.r.length ? '<small>' + w.r.join(' · ') + '</small>' : '');
+      (w.r && w.r.length
+        ? '<small><span class="pfx">top: </span>' + w.r.join(' · ') + '</small>'
+        : '<small class="priv">private repos</small>');
     active.sort((a, b) => a.count - b.count || a.day - b.day);
     // Penalty cubes: up to two random empty days drop red boxes, mixed into the
     // order at random. Catching one costs a point.
@@ -674,14 +696,35 @@ addEventListener('keydown', e => {
   else if (k === 'r') location.reload();
 });
 
-// touch / click: tap the left or right half of the screen to step between lanes
+// touch / click: tap the left or right half to step, or drag to steer directly
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-if (TOUCH) document.getElementById('keys').innerHTML = 'tap left / right<br>to move';
+if (TOUCH) document.getElementById('keys').innerHTML = 'tap sides or drag<br>to move';
+const raycaster = new THREE.Raycaster();
+const playPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+function laneFromClientX(cx, cy) {
+  raycaster.setFromCamera(new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1), camera);
+  const pt = new THREE.Vector3();
+  if (!raycaster.ray.intersectPlane(playPlane, pt)) return G.lane;
+  return Math.max(0, Math.min(LANES - 1, Math.round(pt.x / LANE_W + 3)));
+}
+let drag = null;
 addEventListener('pointerdown', e => {
-  if (G.state === 'end') return;
-  if (e.target.closest && e.target.closest('#end')) return;
-  if (e.clientX < innerWidth / 2) G.lane = Math.max(0, G.lane - 1);
-  else G.lane = Math.min(LANES - 1, G.lane + 1);
+  if (G.state === 'end' || (e.target.closest && e.target.closest('#end'))) return;
+  drag = { x0: e.clientX, moved: false };
+});
+addEventListener('pointermove', e => {
+  if (!drag) return;
+  if (!drag.moved && Math.abs(e.clientX - drag.x0) > 12) drag.moved = true;
+  if (drag.moved) G.lane = laneFromClientX(e.clientX, e.clientY);
+});
+addEventListener('pointerup', e => {
+  if (!drag) return;
+  const wasTap = !drag.moved;
+  drag = null;
+  if (wasTap && G.state !== 'end') {
+    if (e.clientX < innerWidth / 2) G.lane = Math.max(0, G.lane - 1);
+    else G.lane = Math.min(LANES - 1, G.lane + 1);
+  }
 });
 document.getElementById('replay').addEventListener('click', () => location.reload());
 
