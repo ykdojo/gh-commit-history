@@ -61,6 +61,22 @@ npx gh-commit-history --repo strategy-deckbuilder
 npx gh-commit-history --range 1m
 ```
 
+## Play mode
+
+Turn your contribution graph into a game:
+
+```bash
+npx gh-commit-history play [username]
+```
+
+Your green squares fall from the sky as jelly cubes, week by week (Sunday on the left, Saturday on the right - taller and greener means more contributions that day). Step between the seven weekday lanes to catch them. Quiet stretches are skipped with a note like "12 quiet weeks", each year opens with how many weeks you were active, and a timeline of your whole history runs along the bottom with a playhead showing where you are.
+
+Unlike the chart, play mode uses GitHub's official contribution calendar (the profile green squares), fetched year by year - so the first run is fast, no long commit-search fetch.
+
+- **A/D** or arrow keys to move (tap left/right on a phone)
+- **F** to fast-forward, **P** to pause
+- `--years <n>` limits the range; see `play --help` for the rest
+
 ### Switching between charts
 
 When you've generated more than one chart (e.g. your all-repos overview plus a few `--repo` views), each page gets a **Chart:** dropdown to hop between them - no regenerating, no separate index page.
