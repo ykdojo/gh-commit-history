@@ -934,6 +934,7 @@ function frame(now) {
     const step = diff * Math.min(1, dt * 10);
     G.displayScore += diff > 0 ? Math.ceil(step) : Math.floor(step); // round away from zero so -1 registers
     scoreN.textContent = G.displayScore.toLocaleString();
+    scoreN.style.color = G.displayScore < 0 ? '#f85149' : ''; // penalty red below zero, CSS green otherwise
     scoreN.style.transform = 'scale(1.12)';
   } else scoreN.style.transform = 'scale(1)';
 
