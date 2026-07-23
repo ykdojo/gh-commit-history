@@ -74,7 +74,7 @@ Your green squares fall from the sky as jelly cubes, week by week, smallest days
 Unlike the chart, play mode uses GitHub's official contribution calendar (the profile green squares), fetched year by year - so the first run is fast, no long commit-search fetch.
 
 - **A/D** or arrow keys to move (tap left/right on a phone); **P** pauses, **R** replays
-- Red boxes drop on empty days (up to two a week) - catching one costs a point
+- Grey penalty boxes drop on empty days (up to two a week) - catching one costs a point
 - `--years <n>` limits the range; see `play --help` for the rest
 
 ### Switching between charts

@@ -61,7 +61,8 @@ Controls:
   P                    Pause
   R                    Replay
 
-Red boxes drop on empty days (up to two a week) - catching one costs a point.
+Grey penalty boxes drop on empty days (up to two a week) - catching one costs
+a point.
 `;
 
 function parseArgs(argv) {
@@ -371,7 +372,7 @@ const AUTOPILOT = params.get('autopilot') === '1';
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
 const SPAWN_Y = 9.2, FALL_SPEED = 2.85, PADDLE_TOP = 0.58;
-const RED = '#da3633'; // penalty cubes on empty days
+const PENALTY = '#545d68'; // dark grey penalty cubes on empty days (light enough to read on the bg)
 const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -568,7 +569,7 @@ function startEvent() {
 }
 
 function spawnCube(q) {
-  const mat = jellyMaterial(q.red ? RED : GREENS[q.level]);
+  const mat = jellyMaterial(q.red ? PENALTY : GREENS[q.level]);
   const mesh = new THREE.Mesh(cubeGeo, mat);
   const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : TALL[q.level];
   mesh.position.set(laneX(q.lane), SPAWN_Y, 0);
@@ -631,7 +632,7 @@ function endGame() {
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
     G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected' +
-    (G.reds ? ' · -' + G.reds + ' from red boxes' : '');
+    (G.reds ? ' · -' + G.reds + ' from grey boxes' : '');
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
     const w = tot ? Math.round((got / tot) * 100) : 0;
@@ -818,7 +819,8 @@ function frame(now) {
   // score rolling counter
   if (G.displayScore !== G.score) {
     const diff = G.score - G.displayScore;
-    G.displayScore += Math.ceil(diff * Math.min(1, dt * 10));
+    const step = diff * Math.min(1, dt * 10);
+    G.displayScore += diff > 0 ? Math.ceil(step) : Math.floor(step); // round away from zero so -1 registers
     scoreN.textContent = G.displayScore.toLocaleString();
     scoreN.style.transform = 'scale(1.12)';
   } else scoreN.style.transform = 'scale(1)';
@@ -835,7 +837,8 @@ window.__play = {
   get score() { return G.score; }, get state() { return G.state; },
   get caught() { return G.caught; }, get missed() { return G.missed; }, get reds() { return G.reds; },
   get lane() { return G.lane; }, set lane(v) { G.lane = v; },
-  get eventIndex() { return G.ei; }, events, weeks, grandTotal,
+  get eventIndex() { return G.ei; }, get cubes() { return G.cubes; },
+  get displayScore() { return G.displayScore; }, events, weeks, grandTotal,
 };
 </script>
 </body></html>`;
