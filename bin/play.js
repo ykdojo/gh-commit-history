@@ -363,7 +363,7 @@ function renderHTML(payload) {
 <canvas id="scene"></canvas>
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
-<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd> move · drag works too<br><kbd>R</kbd> restart</span><div class="menulink" id="menubtn">☰</div></div>
+<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> <kbd>←</kbd> <kbd>→</kbd> or drag to move</span><div class="menulink" id="menubtn">☰</div></div>
 <div class="hud" id="menu"><div class="mi" id="menuEnd">skip to recap</div><div class="mi" id="menuRestart">restart</div></div>
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
