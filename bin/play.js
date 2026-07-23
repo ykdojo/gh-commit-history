@@ -58,9 +58,8 @@ Options:
   -h, --help           Show this help
 
 Controls:
-  A/D or arrow keys    Step between the 7 weekday lanes
-  P                    Pause
-  R                    Replay
+  A/D or arrow keys    Step between the 7 weekday lanes (drag works too)
+  R                    Restart
 
 Red penalty cubes drop on empty days (up to two a week) - catching one costs
 a point.
@@ -364,13 +363,13 @@ function renderHTML(payload) {
 <canvas id="scene"></canvas>
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
-<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</span><div class="menulink" id="menubtn">☰</div></div>
+<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> or <kbd>←</kbd> <kbd>→</kbd> move · drag works too<br><kbd>R</kbd> restart</span><div class="menulink" id="menubtn">☰</div></div>
 <div class="hud" id="menu"><div class="mi" id="menuEnd">skip to recap</div><div class="mi" id="menuRestart">restart</div></div>
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
 <div id="end"><div class="panel">
   <div class="pct" id="endPct"></div><div class="sub" id="endSub"></div>
-  <div id="endYears"></div><div class="replay" id="replay">press <kbd>R</kbd> to replay</div>
+  <div id="endYears"></div><div class="replay" id="replay">press <kbd>R</kbd> to restart</div>
 </div></div>
 <script type="importmap">
 { "imports": {
@@ -555,7 +554,6 @@ const G = {
   playhead: 0,         // week index (fractional) for the timeline strip
   playheadTarget: 0,
   curWeek: -1,
-  paused: false,
   displayScore: 0,
   done: false,
 };
@@ -730,7 +728,6 @@ addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
   if (k === 'a' || k === 'arrowleft') G.lane = Math.max(0, G.lane - 1);
   else if (k === 'd' || k === 'arrowright') G.lane = Math.min(LANES - 1, G.lane + 1);
-  else if (k === 'p') G.paused = !G.paused;
   else if (k === 'r') location.reload();
 });
 
@@ -738,7 +735,7 @@ addEventListener('keydown', e => {
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 if (TOUCH) {
   document.getElementById('keyhint').innerHTML = 'tap a lane or drag<br>to move';
-  document.getElementById('replay').textContent = 'tap to replay';
+  document.getElementById('replay').textContent = 'tap to restart';
 }
 // Lane picking is by horizontal screen position only - tap height never matters.
 // Lane centers are projected to screen x once per resize (they sit at constant
@@ -888,7 +885,6 @@ function frame(now) {
   requestAnimationFrame(frame);
   let dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  if (G.paused) { renderer.render(scene, camera); return; }
   dt *= URL_SPEED;
 
   if (AUTOPILOT && G.state === 'week') autopilot(dt);
