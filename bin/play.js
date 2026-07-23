@@ -520,7 +520,7 @@ scene.add(paddle);
 // Purely visual - the score is untouched.
 const PADDLE_BLUE = new THREE.Color('#58a6ff'), PADDLE_GLOW = new THREE.Color('#1f6feb');
 const STREAK_GREEN = new THREE.Color('#3fb950'), STREAK_GLOW = new THREE.Color('#2ea043');
-const SPARK_N = 120;
+const SPARK_N = 256;
 const sparkPos = new Float32Array(SPARK_N * 3);
 const sparkVel = new Float32Array(SPARK_N * 3);
 const sparkLife = new Float32Array(SPARK_N); // <= 0 means dead
@@ -545,9 +545,9 @@ function emitSpark(x, cone) {
   sparkPos[i * 3 + 2] = oz;
   // dome: sparks near the paddle center jet highest, edge sparks arc lower
   const centr = 1 - Math.min(1, Math.hypot(ox, oz) / 0.64);
-  sparkVel[i * 3] = (ox / 0.45) * (0.35 + 2.0 * cone) + (Math.random() - 0.5) * 0.15;
-  sparkVel[i * 3 + 1] = (1.1 + Math.random() * 0.4) * (1 + 0.9 * cone) * (0.72 + 0.55 * centr);
-  sparkVel[i * 3 + 2] = (oz / 0.45) * (0.25 + 0.9 * cone) + (Math.random() - 0.5) * 0.1;
+  sparkVel[i * 3] = (ox / 0.45) * (0.3 + 1.4 * cone) + (Math.random() - 0.5) * 0.15;
+  sparkVel[i * 3 + 1] = (1.2 + Math.random() * 0.4) * (1 + 0.9 * cone) * (0.72 + 0.55 * centr);
+  sparkVel[i * 3 + 2] = (oz / 0.45) * (0.2 + 0.7 * cone) + (Math.random() - 0.5) * 0.1;
   sparkLife[i] = 0.65 + Math.random() * 0.45;
 }
 const paddleSpring = { x: 0, v: 0 }; // horizontal glide
@@ -993,7 +993,7 @@ function frame(now) {
   // sparks start as a trickle at a streak of 5 (paddle is fully green by then)
   // and grow denser with wider launch angles the longer the streak runs
   const reward = Math.max(0, G.streak - 4);
-  const rate = Math.min(40, reward * 3);
+  const rate = Math.min(100, reward * 3);
   const sparkCone = Math.min(1, reward / 12);
   paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow +
     (reward ? 0.18 * Math.min(1, reward / 6) * (0.5 + 0.5 * Math.sin(now * 0.007)) : 0);
