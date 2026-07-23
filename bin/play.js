@@ -448,6 +448,25 @@ for (let i = 0; i < LANES; i++) {
   laneMats.push(m);
 }
 
+// weekday markers on the ground in front of the paddle, leaned back so the
+// near-grazing camera can still read them; the active lane's letter brightens
+const dayLabelMats = [];
+for (let i = 0; i < LANES; i++) {
+  const cv = document.createElement('canvas');
+  cv.width = 128; cv.height = 128;
+  const cx = cv.getContext('2d');
+  cx.font = '700 84px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+  cx.textAlign = 'center'; cx.textBaseline = 'middle';
+  cx.fillStyle = '#ffffff';
+  cx.fillText(DAY_NAMES[i][0], 64, 70);
+  const m = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, opacity: 0.35, color: '#8b949e' });
+  const tile = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), m);
+  tile.position.set(laneX(i), 0.16, 0.8);
+  tile.rotation.x = -0.9;
+  scene.add(tile);
+  dayLabelMats.push(m);
+}
+
 // paddle (the collector tray)
 const paddleMat = new THREE.MeshPhysicalMaterial({ color: '#58a6ff', roughness: 0.3, clearcoat: 1, emissive: '#1f6feb', emissiveIntensity: 0.35 });
 const paddle = new THREE.Mesh(new RoundedBoxGeometry(1.04, 0.22, 1.04, 3, 0.09), paddleMat);
@@ -604,8 +623,8 @@ function catchCube(c) {
   paddleSquash.v = -6;
   const y = weeks[G.curWeek].s.slice(0, 4);
   if (c.red) {
-    G.score = Math.max(0, G.score - 1); G.reds++;
-    G.perYear[y] = Math.max(0, (G.perYear[y] || 0) - 1);
+    G.score -= 1; G.reds++;
+    G.perYear[y] = (G.perYear[y] || 0) - 1;
     popText(c.mesh.position, '-1', true);
     return;
   }
@@ -780,7 +799,11 @@ function frame(now) {
   paddle.scale.set(2 - Math.min(paddleSquash.x, 1.4), paddleSquash.x, 2 - Math.min(paddleSquash.x, 1.4));
   paddle.scale.x = Math.max(0.6, Math.min(paddle.scale.x, 1.5));
   paddle.scale.z = paddle.scale.x;
-  for (let i = 0; i < LANES; i++) laneMats[i].color.set(i === G.lane ? '#1c2530' : '#161b22');
+  for (let i = 0; i < LANES; i++) {
+    laneMats[i].color.set(i === G.lane ? '#1c2530' : '#161b22');
+    dayLabelMats[i].opacity = i === G.lane ? 0.9 : 0.35;
+    dayLabelMats[i].color.set(i === G.lane ? '#e6edf3' : '#8b949e');
+  }
 
   // cubes
   for (let i = G.cubes.length - 1; i >= 0; i--) {
