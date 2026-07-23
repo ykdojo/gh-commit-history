@@ -513,6 +513,37 @@ paddleMat.opacity = 1;
 const paddle = new THREE.Mesh(new RoundedBoxGeometry(1.04, 0.22, 1.04, 3, 0.09), paddleMat);
 paddle.position.set(0, PADDLE_TOP - 0.13, 0);
 scene.add(paddle);
+
+// Green streak: catching greens without a red tints the paddle green and makes
+// it glow; once a streak is going, each catch throws off a burst of sparks.
+// Purely visual - the score is untouched.
+const PADDLE_BLUE = new THREE.Color('#58a6ff'), PADDLE_GLOW = new THREE.Color('#1f6feb');
+const STREAK_GREEN = new THREE.Color('#3fb950'), STREAK_GLOW = new THREE.Color('#2ea043');
+const SPARK_N = 120;
+const sparkPos = new Float32Array(SPARK_N * 3);
+const sparkVel = new Float32Array(SPARK_N * 3);
+const sparkLife = new Float32Array(SPARK_N); // <= 0 means dead
+for (let i = 0; i < SPARK_N; i++) sparkPos[i * 3 + 1] = -999;
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
+  color: '#3fb950', size: 0.07, transparent: true, opacity: 0.9,
+}));
+sparks.frustumCulled = false;
+scene.add(sparks);
+let sparkI = 0;
+function burstSparks(x, n) {
+  for (let k = 0; k < n; k++) {
+    const i = sparkI = (sparkI + 1) % SPARK_N;
+    sparkPos[i * 3] = x + (Math.random() - 0.5) * 0.7;
+    sparkPos[i * 3 + 1] = PADDLE_TOP + 0.1;
+    sparkPos[i * 3 + 2] = (Math.random() - 0.5) * 0.7;
+    sparkVel[i * 3] = (Math.random() - 0.5) * 2.4;
+    sparkVel[i * 3 + 1] = 1.8 + Math.random() * 2.2;
+    sparkVel[i * 3 + 2] = (Math.random() - 0.5) * 2.4;
+    sparkLife[i] = 0.45 + Math.random() * 0.3;
+  }
+}
 const paddleSpring = { x: 0, v: 0 }; // horizontal glide
 const paddleSquash = { x: 1, v: 0 };
 
@@ -555,7 +586,7 @@ const G = {
   weekT: 0,
   cubes: [],
   lane: 3,
-  score: 0, caught: 0, missed: 0, reds: 0,
+  score: 0, caught: 0, missed: 0, reds: 0, streak: 0, glow: 0,
   perYear: {},         // year -> collected
   perWeekCollected: new Array(weeks.length).fill(0),
   playhead: 0,         // week index (fractional) for the timeline strip
@@ -688,11 +719,14 @@ function catchCube(c) {
   jiggle(paddleMat, 0.1);
   const y = weeks[c.week].s.slice(0, 4); // the cube's own week - it may outlive its week event
   if (c.red) {
+    G.streak = 0;
     G.score -= 1; G.reds++;
     G.perYear[y] = (G.perYear[y] || 0) - 1;
     popText(c.mesh.position, '-1', true);
     return;
   }
+  G.streak++;
+  if (G.streak >= 3) burstSparks(c.mesh.position.x, Math.min(4 + G.streak, 18));
   G.score += c.count; G.caught++;
   G.perYear[y] = (G.perYear[y] || 0) + c.count;
   G.perWeekCollected[c.week] += c.count;
@@ -939,6 +973,23 @@ function frame(now) {
   paddle.position.x += paddleSpring.v * dt;
   spring(paddleSquash, dt, 160, 10);
   paddleMat.userData.uT.value += dt;
+  // streak glow eases in as greens stack up (full at 10) and snaps back on a red
+  G.glow += (Math.min(1, G.streak / 10) - G.glow) * Math.min(1, dt * 4);
+  paddleMat.color.copy(PADDLE_BLUE).lerp(STREAK_GREEN, G.glow);
+  paddleMat.emissive.copy(PADDLE_GLOW).lerp(STREAK_GLOW, G.glow);
+  paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow;
+  let sparkAlive = false;
+  for (let i = 0; i < SPARK_N; i++) {
+    if (sparkLife[i] <= 0) continue;
+    sparkAlive = true;
+    sparkLife[i] -= dt;
+    if (sparkLife[i] <= 0) { sparkPos[i * 3 + 1] = -999; continue; }
+    sparkVel[i * 3 + 1] -= 7 * dt;
+    sparkPos[i * 3] += sparkVel[i * 3] * dt;
+    sparkPos[i * 3 + 1] += sparkVel[i * 3 + 1] * dt;
+    sparkPos[i * 3 + 2] += sparkVel[i * 3 + 2] * dt;
+  }
+  if (sparkAlive) sparkGeo.attributes.position.needsUpdate = true;
   const spread = 1 + (1 - Math.min(paddleSquash.x, 1.4)) * 0.45;
   paddle.scale.set(spread, Math.max(0.3, paddleSquash.x), spread);
   paddle.scale.x = Math.max(0.85, Math.min(paddle.scale.x, 1.2));
