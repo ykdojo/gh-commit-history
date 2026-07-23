@@ -372,7 +372,7 @@ const AUTOPILOT = params.get('autopilot') === '1';
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
 const SPAWN_Y = 9.2, FALL_SPEED = 2.85, PADDLE_TOP = 0.58;
-const PENALTY = '#da3633'; // red penalty cubes on empty days
+const PENALTY = '#67060c'; // dark red penalty cubes, same tone as the level-1 greens
 const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
