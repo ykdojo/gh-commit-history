@@ -391,9 +391,9 @@ const AUTOPILOT = params.get('autopilot') === '1';
 
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
-const SPAWN_Y = 9.2, FALL_SPEED = 2.85, PADDLE_TOP = 0.58;
+const SPAWN_Y = 9.2, FALL_SPEED = 3.4, PADDLE_TOP = 0.58;
 const PENALTY = '#a40e26'; // deep crimson penalty cubes - dark but unmissable
-const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
+const SPAWN_BASE = 0.26, SPAWN_PER_LANE = 0.08; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
