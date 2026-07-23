@@ -520,14 +520,18 @@ function jellyMaterial(hex) {
   });
   mat.userData.uT = { value: 99 };
   mat.userData.uAmp = { value: 0 };
+  mat.userData.uKx = { value: 4.0 };
+  mat.userData.uKy = { value: 9.0 };
   mat.onBeforeCompile = shader => {
     shader.uniforms.uT = mat.userData.uT;
     shader.uniforms.uAmp = mat.userData.uAmp;
+    shader.uniforms.uKx = mat.userData.uKx;
+    shader.uniforms.uKy = mat.userData.uKy;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\\nuniform float uT; uniform float uAmp;')
+      .replace('#include <common>', '#include <common>\\nuniform float uT; uniform float uAmp; uniform float uKx; uniform float uKy;')
       .replace('#include <begin_vertex>', [
         '#include <begin_vertex>',
-        'float _w = sin(position.y * 9.0 + position.x * 4.0 - uT * 24.0) * exp(-4.5 * uT);',
+        'float _w = sin(position.y * uKy + position.x * uKx - uT * 24.0) * exp(-4.5 * uT);',
         'transformed += normal * (uAmp * _w);',
       ].join('\\n'));
   };
@@ -648,7 +652,16 @@ function spawnCube(q) {
   G.cubes.push(c);
 }
 
-function wobble(c, amp) { c.mat.userData.uT.value = 0; c.mat.userData.uAmp.value = amp; }
+// amp is the max: each wobble gets a random strength (50-100%) and a random
+// wave direction so no two catches jiggle quite the same way
+function wobble(c, amp) { jiggle(c.mat, amp); }
+function jiggle(mat, amp) {
+  const a = Math.random() * Math.PI * 2, k = 9.85;
+  mat.userData.uKx.value = Math.cos(a) * k;
+  mat.userData.uKy.value = Math.sin(a) * k;
+  mat.userData.uT.value = 0;
+  mat.userData.uAmp.value = amp * (0.5 + Math.random() * 0.5);
+}
 
 function popText(worldPos, text, bad) {
   const v = worldPos.clone().project(camera);
@@ -663,11 +676,11 @@ function popText(worldPos, text, bad) {
 
 function catchCube(c) {
   c.state = 'caught'; c.t = 0;
-  c.sy.v = -14; c.sx.v = 8; c.sz.v = 8;
+  const sq = 0.7 + Math.random() * 0.3; // squash strength, current values as max
+  c.sy.v = -14 * sq; c.sx.v = 8 * sq; c.sz.v = 8 * sq;
   wobble(c, 0.12);
-  paddleSquash.v = -13;
-  paddleMat.userData.uT.value = 0;
-  paddleMat.userData.uAmp.value = 0.1;
+  paddleSquash.v = -13 * (0.7 + Math.random() * 0.3);
+  jiggle(paddleMat, 0.1);
   const y = weeks[c.week].s.slice(0, 4); // the cube's own week - it may outlive its week event
   if (c.red) {
     G.score -= 1; G.reds++;
@@ -683,7 +696,8 @@ function catchCube(c) {
 
 function missCube(c) {
   c.state = 'missed'; c.t = 0;
-  c.sy.v = -10; c.sx.v = 5; c.sz.v = 5;
+  const sq = 0.7 + Math.random() * 0.3;
+  c.sy.v = -10 * sq; c.sx.v = 5 * sq; c.sz.v = 5 * sq;
   wobble(c, 0.09);
   if (!c.red) G.missed++; // letting a red one splat is the point
   c.mat.color.set('#484f58');
