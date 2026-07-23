@@ -66,15 +66,16 @@ npx gh-commit-history --range 1m
 Turn your contribution graph into a game:
 
 ```bash
-npx gh-commit-history play [username]
+npx gh-commit-history play
 ```
 
-Your green squares fall from the sky as jelly cubes, week by week, smallest days first (each day falls in its weekday lane - Sunday on the left, Saturday on the right; taller and greener means more contributions that day). Each week's label shows your top repos that week, by commits. Step between the seven weekday lanes to catch them. Quiet stretches are skipped with a note like "12 quiet weeks", each year opens with how many weeks you were active, and a timeline of your whole history runs along the bottom with a playhead showing where you are.
+Your green squares fall from the sky as jelly cubes, week by week, smallest days first (each day falls in its weekday lane - Sunday on the left, Saturday on the right; a cube's height tracks how many contributions that day had). Each week's label shows your top repos that week, by commits. Move between the seven weekday lanes to catch them. Quiet stretches are skipped with a note like "12 quiet weeks", each year opens with how many weeks you were active, and a timeline of your whole history runs along the bottom with a playhead showing where you are.
 
-Unlike the chart, play mode uses GitHub's official contribution calendar (the profile green squares), fetched year by year - so the first run is fast, no long commit-search fetch.
+Play mode always runs for your authenticated user - that's the only account whose private activity the API will itemize, so your private contributions count and your private repos show up in the week labels. It uses GitHub's official contribution calendar (the profile green squares), fetched year by year: the first run is fast (no long commit-search fetch), and later runs take a few seconds thanks to caching. The finished page opens in your browser automatically (`--no-open` to skip).
 
-- **A/D** or arrow keys to move (tap left/right on a phone); **P** pauses, **R** replays
-- Red penalty boxes drop on empty days (up to two a week) - catching one costs a point
+- **A/D**, **← →** (hold to keep stepping) or drag to move; on a phone, tap a lane or drag
+- **R** restarts, and the **☰ menu** under the controls hint has skip-to-recap and restart
+- Red penalty cubes drop on empty days (up to two a week) - catching one costs a point; catching greens without dropping any builds a streak that turns the paddle green and sets off a spark fountain
 - `--years <n>` limits the range; see `play --help` for the rest
 
 ### Switching between charts
