@@ -299,7 +299,7 @@ function renderHTML(payload) {
   #score .n { font-size:30px; font-weight:700; color:var(--green); transition:transform .1s; display:inline-block;
     font-variant-numeric:tabular-nums; }
   #score .sub { font-size:12px; color:var(--dim); margin-top:2px; }
-  #weeklabel { top:18px; left:50%; transform:translateX(-50%); font-size:14px; color:var(--dim);
+  #weeklabel { top:0; left:50%; transform:translateX(-50%); font-size:14px; color:var(--dim);
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px;
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
@@ -340,7 +340,7 @@ function renderHTML(payload) {
     #score { top:10px; left:10px; padding:7px 12px; }
     #score .n { font-size:22px; }
     #score .sub { font-size:10px; }
-    #weeklabel { top:auto; bottom:92px; font-size:12px; padding:6px 10px; white-space:nowrap; }
+    #weeklabel { font-size:12px; padding:6px 10px; white-space:nowrap; }
     #keys { top:10px; right:10px; font-size:10px; padding:6px 10px; }
     #card .big { font-size:42px; }
     #card .sub { font-size:13px; }
@@ -488,8 +488,10 @@ for (let i = 0; i < LANES; i++) {
   dayLabelMats.push(m);
 }
 
-// paddle (the collector tray)
-const paddleMat = new THREE.MeshPhysicalMaterial({ color: '#58a6ff', roughness: 0.3, clearcoat: 1, emissive: '#1f6feb', emissiveIntensity: 0.35 });
+// paddle (the collector tray) - same jelly material as the cubes so it can wobble on catch
+const paddleMat = jellyMaterial('#58a6ff');
+paddleMat.emissive.set('#1f6feb'); paddleMat.emissiveIntensity = 0.35;
+paddleMat.opacity = 1;
 const paddle = new THREE.Mesh(new RoundedBoxGeometry(1.04, 0.22, 1.04, 3, 0.09), paddleMat);
 paddle.position.set(0, PADDLE_TOP - 0.13, 0);
 scene.add(paddle);
@@ -572,7 +574,7 @@ function startEvent() {
   } else if (ev.type === 'gap') {
     G.state = 'card';
     G.playheadTarget = ev.to;
-    showCard('· · ·', ev.n + ' quiet weeks', 1.0);
+    showCard('· · ·', ev.n + ' quiet weeks', 0.6);
   } else {
     G.state = 'week';
     G.curWeek = ev.week;
@@ -648,7 +650,9 @@ function catchCube(c) {
   c.state = 'caught'; c.t = 0;
   c.sy.v = -14; c.sx.v = 8; c.sz.v = 8;
   wobble(c, 0.12);
-  paddleSquash.v = -6;
+  paddleSquash.v = -13;
+  paddleMat.userData.uT.value = 0;
+  paddleMat.userData.uAmp.value = 0.1;
   const y = weeks[c.week].s.slice(0, 4); // the cube's own week - it may outlive its week event
   if (c.red) {
     G.score -= 1; G.reds++;
@@ -704,17 +708,24 @@ addEventListener('keydown', e => {
 // touch / click: tap the left or right half to step, or drag to steer directly
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 if (TOUCH) document.getElementById('keys').innerHTML = 'tap a lane or drag<br>to move';
-const raycaster = new THREE.Raycaster();
-const playPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-function worldXFromClient(cx, cy) {
-  raycaster.setFromCamera(new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1), camera);
-  const pt = new THREE.Vector3();
-  return raycaster.ray.intersectPlane(playPlane, pt) ? pt.x : null;
+// Lane picking is by horizontal screen position only - tap height never matters.
+// Lane centers are projected to screen x once per resize (they sit at constant
+// depth, so their screen spacing is uniform).
+let laneScreenX0 = 0, laneScreenDX = 1;
+function computeLaneScreen() {
+  const a = new THREE.Vector3(laneX(0), PADDLE_TOP, 0).project(camera);
+  const b = new THREE.Vector3(laneX(1), PADDLE_TOP, 0).project(camera);
+  laneScreenX0 = (a.x * 0.5 + 0.5) * innerWidth;
+  laneScreenDX = ((b.x - a.x) * 0.5) * innerWidth;
+  // Anchor the week label right below the playable area (the platform's front
+  // edge), clamped so it never runs into the timeline strip.
+  const l = new THREE.Vector3(0, 0, 1.2).project(camera);
+  const py = (-l.y * 0.5 + 0.5) * (innerHeight - 8) + 6;
+  weekLabel.style.top = Math.min(py, innerHeight - 74 - 70) + 'px';
 }
-function laneFromClientX(cx, cy) {
-  const x = worldXFromClient(cx, cy);
-  if (x === null) return G.lane;
-  return Math.max(0, Math.min(LANES - 1, Math.round(x / LANE_W + 3)));
+function laneT(cx) { return (cx - laneScreenX0) / laneScreenDX; }
+function laneFromClientX(cx) {
+  return Math.max(0, Math.min(LANES - 1, Math.round(laneT(cx))));
 }
 let drag = null;
 addEventListener('pointerdown', e => {
@@ -724,18 +735,17 @@ addEventListener('pointerdown', e => {
 addEventListener('pointermove', e => {
   if (!drag) return;
   if (!drag.moved && Math.abs(e.clientX - drag.x0) > 12) drag.moved = true;
-  if (drag.moved) G.lane = laneFromClientX(e.clientX, e.clientY);
+  if (drag.moved) G.lane = laneFromClientX(e.clientX);
 });
 addEventListener('pointerup', e => {
   if (!drag) return;
   const wasTap = !drag.moved;
   drag = null;
   if (wasTap && G.state !== 'end') {
-    // A tap on a lane jumps straight to it; outside the board it steps by one.
-    const x = worldXFromClient(e.clientX, e.clientY);
-    if (x !== null && Math.abs(x) <= 3.5 * LANE_W) {
-      G.lane = Math.max(0, Math.min(LANES - 1, Math.round(x / LANE_W + 3)));
-    } else if (e.clientX < innerWidth / 2) G.lane = Math.max(0, G.lane - 1);
+    // A tap in a column jumps straight to it; beyond the outer lanes it steps by one.
+    const t = laneT(e.clientX);
+    if (t >= -0.5 && t <= LANES - 0.5) G.lane = laneFromClientX(e.clientX);
+    else if (t < -0.5) G.lane = Math.max(0, G.lane - 1);
     else G.lane = Math.min(LANES - 1, G.lane + 1);
   }
 });
@@ -819,6 +829,7 @@ function resize() {
   const v = 2 * Math.atan(Math.tan(HFOV / 2) / camera.aspect) * 180 / Math.PI;
   camera.fov = Math.min(100, Math.max(55, v));
   camera.updateProjectionMatrix();
+  computeLaneScreen();
 }
 addEventListener('resize', resize);
 resize();
@@ -857,7 +868,8 @@ function frame(now) {
   paddleSpring.v += ((targetX - paddle.position.x) * 180 - paddleSpring.v * 16) * dt;
   paddle.position.x += paddleSpring.v * dt;
   spring(paddleSquash, dt, 160, 10);
-  paddle.scale.set(2 - Math.min(paddleSquash.x, 1.4), paddleSquash.x, 2 - Math.min(paddleSquash.x, 1.4));
+  paddleMat.userData.uT.value += dt;
+  paddle.scale.set(2 - Math.min(paddleSquash.x, 1.4), Math.max(0.3, paddleSquash.x), 2 - Math.min(paddleSquash.x, 1.4));
   paddle.scale.x = Math.max(0.6, Math.min(paddle.scale.x, 1.5));
   paddle.scale.z = paddle.scale.x;
   for (let i = 0; i < LANES; i++) {
@@ -949,10 +961,34 @@ function main(argv) {
     (byWeek[ws] = byWeek[ws] || {})[repo] = (byWeek[ws][repo] || 0) + commits;
   }
   const shortName = r => r.toLowerCase().startsWith(login.toLowerCase() + '/') ? r.slice(login.length + 1) : r;
+  const topOf = m => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r]) => shortName(r));
   for (const w of weeks) {
     const m = byWeek[w.s];
-    if (m) w.r = Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r]) => shortName(r));
+    if (m) w.r = topOf(m);
   }
+
+  // GraphQL won't itemize restricted private-org activity, but the commit search
+  // API does - and the main chart command caches it per repo and day. Reuse that
+  // cache to label the weeks GraphQL left blank.
+  let filled = 0, hadChartCache = false;
+  try {
+    const chart = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, `${login}.json`), 'utf8'));
+    hadChartCache = true;
+    const searchByWeek = {};
+    for (const win of Object.values(chart.windows || {})) {
+      for (const c of win.commits || []) {
+        const ws = weekStart(c.date);
+        (searchByWeek[ws] = searchByWeek[ws] || {})[c.repo] = (searchByWeek[ws][c.repo] || 0) + 1;
+      }
+    }
+    for (const w of weeks) {
+      if (w.r && w.r.length) continue;
+      const m = searchByWeek[w.s];
+      if (m) { w.r = topOf(m); filled++; }
+    }
+  } catch { /* no chart cache */ }
+  if (filled) console.log(`  ${filled} week(s) labeled from the chart's commit-search cache (private repos)`);
+  else if (!hadChartCache) console.log('  Tip: run `npx gh-commit-history` once to label private-repo weeks too.');
   const grandTotal = Object.values(yearStats).reduce((a, y) => a + y.total, 0);
 
   const html = renderHTML({ login, weeks, years: yearStats });
