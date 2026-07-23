@@ -304,14 +304,13 @@ function renderHTML(payload) {
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
     overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  #weeklabel small .pfx, #weeklabel small.priv { color:var(--dim); }
+  #weeklabel small.priv { color:var(--dim); }
   #weeklabel:empty { display:none; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
   kbd { background:var(--panel); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
     padding:0 5px; font-size:11px; color:var(--text); }
-  #keys .menulink { margin-top:3px; cursor:pointer; opacity:.55; font-size:11px;
-    text-decoration:underline dotted; }
+  #keys .menulink { margin-top:2px; cursor:pointer; opacity:.5; font-size:13px; line-height:1.2; }
   #keys .menulink:hover { opacity:1; }
   #menu { right:20px; display:none; font-size:12px; color:var(--dim); text-align:right;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:4px 0; }
@@ -351,7 +350,7 @@ function renderHTML(payload) {
     #score .sub { font-size:10px; }
     #weeklabel { font-size:12px; padding:6px 10px; white-space:nowrap; }
     #keys { top:10px; right:10px; font-size:10px; padding:6px 10px; }
-    #keys .menulink { font-size:9px; }
+    #keys .menulink { font-size:12px; }
     #menu { right:10px; font-size:10px; }
     #card .big { font-size:42px; }
     #card .sub { font-size:13px; }
@@ -365,7 +364,7 @@ function renderHTML(payload) {
 <canvas id="scene"></canvas>
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
-<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</span><div class="menulink" id="menubtn">menu</div></div>
+<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</span><div class="menulink" id="menubtn">☰</div></div>
 <div class="hud" id="menu"><div class="mi" id="menuEnd">skip to recap</div><div class="mi" id="menuRestart">restart</div></div>
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
@@ -606,7 +605,7 @@ function startEvent() {
     });
     weekLabel.innerHTML = fmtWeek(w.s) +
       (w.r && w.r.length
-        ? '<small><span class="pfx">top: </span>' + w.r.join(' · ') + '</small>'
+        ? '<small>' + w.r.join(' · ') + '</small>'
         : '<small class="priv">private repos</small>');
     active.sort((a, b) => a.count - b.count || a.day - b.day);
     // Penalty cubes: up to two random empty days drop red boxes, mixed into the
