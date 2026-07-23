@@ -61,22 +61,6 @@ npx gh-commit-history --repo strategy-deckbuilder
 npx gh-commit-history --range 1m
 ```
 
-## Play mode
-
-Turn your contribution graph into a game:
-
-```bash
-npx gh-commit-history play [username]
-```
-
-Your green squares fall from the sky as jelly cubes, week by week, smallest days first (each day falls in its weekday lane - Sunday on the left, Saturday on the right; taller and greener means more contributions that day). Each week's label shows your top repos that week, by commits. Step between the seven weekday lanes to catch them. Quiet stretches are skipped with a note like "12 quiet weeks", each year opens with how many weeks you were active, and a timeline of your whole history runs along the bottom with a playhead showing where you are.
-
-Unlike the chart, play mode uses GitHub's official contribution calendar (the profile green squares), fetched year by year - so the first run is fast, no long commit-search fetch.
-
-- **A/D** or arrow keys to move (tap left/right on a phone); **P** pauses, **R** replays
-- Red penalty boxes drop on empty days (up to two a week) - catching one costs a point
-- `--years <n>` limits the range; see `play --help` for the rest
-
 ### Switching between charts
 
 When you've generated more than one chart (e.g. your all-repos overview plus a few `--repo` views), each page gets a **Chart:** dropdown to hop between them - no regenerating, no separate index page.
@@ -84,3 +68,16 @@ When you've generated more than one chart (e.g. your all-repos overview plus a f
 ![The Chart dropdown in the controls bar, switching between saved charts](assets/chart-switcher.png)
 
 Every run rescans `~/.gh-commit-history/` and refreshes the dropdown in all of your charts, so a chart you make later shows up in the ones you made earlier (regenerate older charts once to pick up the feature). The current view's range and granularity carry over when you switch. The dropdown only appears when there are two or more charts.
+
+## Play mode
+
+Turn your contribution graph into a game:
+
+```bash
+npx gh-commit-history play
+```
+
+Your green squares fall from the sky as jelly cubes, week by week - move between the seven weekday lanes to catch them, and dodge the red penalty cubes. Runs for your authenticated user, private contributions included.
+
+- **A/D**, **← →** or drag to move; **R** restarts
+- See `play --help` for the options
