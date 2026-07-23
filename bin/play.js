@@ -532,17 +532,20 @@ const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
 sparks.frustumCulled = false;
 scene.add(sparks);
 let sparkI = 0, sparkAcc = 0;
-// One gentle spark off the paddle - always spawns on the paddle's own
-// footprint; cone (0..1) widens the launch angles, not the spawn area.
+// One spark off the paddle, fountain-style: it spawns on the paddle's own
+// footprint and its velocity points outward from the paddle center - straight
+// up at the middle, arcing away at the edges. cone (0..1) makes the fountain
+// taller and wider as the streak grows.
 function emitSpark(x, cone) {
   const i = sparkI = (sparkI + 1) % SPARK_N;
-  sparkPos[i * 3] = x + (Math.random() - 0.5) * 0.9;
+  const ox = (Math.random() - 0.5) * 0.9, oz = (Math.random() - 0.5) * 0.9;
+  sparkPos[i * 3] = x + ox;
   sparkPos[i * 3 + 1] = PADDLE_TOP + 0.05;
-  sparkPos[i * 3 + 2] = (Math.random() - 0.5) * 0.9;
-  sparkVel[i * 3] = (Math.random() - 0.5) * (0.5 + 2.6 * cone);
-  sparkVel[i * 3 + 1] = 1.0 + Math.random() * 1.0;
-  sparkVel[i * 3 + 2] = (Math.random() - 0.5) * (0.5 + 1.4 * cone);
-  sparkLife[i] = 0.6 + Math.random() * 0.4;
+  sparkPos[i * 3 + 2] = oz;
+  sparkVel[i * 3] = (ox / 0.45) * (0.35 + 2.0 * cone) + (Math.random() - 0.5) * 0.15;
+  sparkVel[i * 3 + 1] = (1.1 + Math.random() * 0.5) * (1 + 0.9 * cone);
+  sparkVel[i * 3 + 2] = (oz / 0.45) * (0.25 + 0.9 * cone) + (Math.random() - 0.5) * 0.1;
+  sparkLife[i] = 0.65 + Math.random() * 0.45;
 }
 const paddleSpring = { x: 0, v: 0 }; // horizontal glide
 const paddleSquash = { x: 1, v: 0 };
@@ -985,7 +988,7 @@ function frame(now) {
   // sparks start as a trickle at a streak of 5 (paddle is fully green by then)
   // and grow denser with wider launch angles the longer the streak runs
   const reward = Math.max(0, G.streak - 4);
-  const rate = Math.min(32, reward * 3);
+  const rate = Math.min(40, reward * 3);
   const sparkCone = Math.min(1, reward / 12);
   paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow +
     (reward ? 0.18 * Math.min(1, reward / 6) * (0.5 + 0.5 * Math.sin(now * 0.007)) : 0);
