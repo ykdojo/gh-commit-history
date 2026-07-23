@@ -315,6 +315,8 @@ function renderHTML(payload) {
   #card.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
   #card .big { font-size:64px; font-weight:800; letter-spacing:-1px; }
   #card .sub { font-size:16px; color:var(--dim); margin-top:6px; }
+  #card .tag { font-size:15px; font-weight:600; color:var(--green); margin-top:10px; }
+  #card .tag:empty { display:none; }
   #timeline { position:fixed; left:0; right:0; bottom:0; z-index:9; display:block; }
   #end { position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
     background:rgba(13,17,23,.88); }
@@ -344,6 +346,7 @@ function renderHTML(payload) {
     #keys { top:10px; right:10px; font-size:10px; padding:6px 10px; }
     #card .big { font-size:42px; }
     #card .sub { font-size:13px; }
+    #card .tag { font-size:13px; }
     #end .panel { padding:22px 20px; }
     .yrow .v { width:96px; font-size:11px; }
   }
@@ -354,7 +357,7 @@ function renderHTML(payload) {
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
 <div class="hud" id="keys"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</div>
-<div class="hud" id="card"><div class="big"></div><div class="sub"></div></div>
+<div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
 <div id="end"><div class="panel">
   <h1 id="endTitle"></h1><div class="pct" id="endPct"></div><div class="sub" id="endSub"></div>
@@ -550,9 +553,10 @@ scoreSub.textContent = 'of ' + grandTotal.toLocaleString() + ' contributions · 
 const weekLabel = document.getElementById('weeklabel');
 const card = document.getElementById('card');
 
-function showCard(big, sub, dur) {
+function showCard(big, sub, dur, tag) {
   card.querySelector('.big').textContent = big;
   card.querySelector('.sub').textContent = sub;
+  card.querySelector('.tag').textContent = tag || '';
   card.classList.add('show');
   G.cardT = 0; G.cardDur = dur;
 }
@@ -569,8 +573,10 @@ function startEvent() {
   if (ev.type === 'year') {
     G.state = 'card';
     G.playheadTarget = ev.week;
+    const first = G.ei === 0;
     showCard(ev.year, 'active ' + ev.stats.active + ' week' + (ev.stats.active === 1 ? '' : 's') +
-      ' · ' + ev.stats.total.toLocaleString() + ' contributions', 1.5);
+      ' · ' + ev.stats.total.toLocaleString() + ' contributions', first ? 2.2 : 1.5,
+      first ? 'Catch your GitHub contributions!' : '');
   } else if (ev.type === 'gap') {
     G.state = 'card';
     G.playheadTarget = ev.to;
