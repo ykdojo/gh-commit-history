@@ -533,11 +533,11 @@ sparks.frustumCulled = false;
 scene.add(sparks);
 let sparkI = 0, sparkAcc = 0;
 // one gentle spark drifting up off the paddle - the continuous reward emitter
-function emitSpark(x) {
+function emitSpark(x, spread) {
   const i = sparkI = (sparkI + 1) % SPARK_N;
-  sparkPos[i * 3] = x + (Math.random() - 0.5) * 0.9;
+  sparkPos[i * 3] = x + (Math.random() - 0.5) * spread;
   sparkPos[i * 3 + 1] = PADDLE_TOP + 0.05;
-  sparkPos[i * 3 + 2] = (Math.random() - 0.5) * 0.9;
+  sparkPos[i * 3 + 2] = (Math.random() - 0.5) * Math.min(spread, 1.1);
   sparkVel[i * 3] = (Math.random() - 0.5) * 0.5;
   sparkVel[i * 3 + 1] = 0.9 + Math.random() * 0.9;
   sparkVel[i * 3 + 2] = (Math.random() - 0.5) * 0.5;
@@ -981,10 +981,15 @@ function frame(now) {
   G.glow += (Math.min(1, G.streak / 10) - G.glow) * Math.min(1, dt * 4);
   paddleMat.color.copy(PADDLE_BLUE).lerp(STREAK_GREEN, G.glow);
   paddleMat.emissive.copy(PADDLE_GLOW).lerp(STREAK_GLOW, G.glow);
-  const full = G.streak >= 10;
-  paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow + (full ? 0.18 * (0.5 + 0.5 * Math.sin(now * 0.007)) : 0);
-  sparkAcc += dt * (full ? 14 : 0);
-  while (sparkAcc >= 1) { sparkAcc -= 1; emitSpark(paddle.position.x); }
+  // sparks start as a trickle at a streak of 5 and grow into a wider, denser
+  // fountain the longer the streak runs
+  const reward = Math.max(0, G.streak - 4);
+  const rate = Math.min(32, reward * 3);
+  const sparkSpread = Math.min(2.4, 0.8 + reward * 0.12);
+  paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow +
+    (reward ? 0.18 * Math.min(1, reward / 6) * (0.5 + 0.5 * Math.sin(now * 0.007)) : 0);
+  sparkAcc += dt * rate;
+  while (sparkAcc >= 1) { sparkAcc -= 1; emitSpark(paddle.position.x, sparkSpread); }
   let sparkAlive = false;
   for (let i = 0; i < SPARK_N; i++) {
     if (sparkLife[i] <= 0) continue;
