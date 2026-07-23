@@ -568,11 +568,11 @@ function startEvent() {
     G.state = 'card';
     G.playheadTarget = ev.week;
     showCard(ev.year, 'active ' + ev.stats.active + ' week' + (ev.stats.active === 1 ? '' : 's') +
-      ' · ' + ev.stats.total.toLocaleString() + ' contributions', 2.3);
+      ' · ' + ev.stats.total.toLocaleString() + ' contributions', 1.5);
   } else if (ev.type === 'gap') {
     G.state = 'card';
     G.playheadTarget = ev.to;
-    showCard('· · ·', ev.n + ' quiet weeks', 1.4);
+    showCard('· · ·', ev.n + ' quiet weeks', 1.0);
   } else {
     G.state = 'week';
     G.curWeek = ev.week;
@@ -703,14 +703,18 @@ addEventListener('keydown', e => {
 
 // touch / click: tap the left or right half to step, or drag to steer directly
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-if (TOUCH) document.getElementById('keys').innerHTML = 'tap sides or drag<br>to move';
+if (TOUCH) document.getElementById('keys').innerHTML = 'tap a lane or drag<br>to move';
 const raycaster = new THREE.Raycaster();
 const playPlane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
-function laneFromClientX(cx, cy) {
+function worldXFromClient(cx, cy) {
   raycaster.setFromCamera(new THREE.Vector2((cx / innerWidth) * 2 - 1, -(cy / innerHeight) * 2 + 1), camera);
   const pt = new THREE.Vector3();
-  if (!raycaster.ray.intersectPlane(playPlane, pt)) return G.lane;
-  return Math.max(0, Math.min(LANES - 1, Math.round(pt.x / LANE_W + 3)));
+  return raycaster.ray.intersectPlane(playPlane, pt) ? pt.x : null;
+}
+function laneFromClientX(cx, cy) {
+  const x = worldXFromClient(cx, cy);
+  if (x === null) return G.lane;
+  return Math.max(0, Math.min(LANES - 1, Math.round(x / LANE_W + 3)));
 }
 let drag = null;
 addEventListener('pointerdown', e => {
@@ -727,7 +731,11 @@ addEventListener('pointerup', e => {
   const wasTap = !drag.moved;
   drag = null;
   if (wasTap && G.state !== 'end') {
-    if (e.clientX < innerWidth / 2) G.lane = Math.max(0, G.lane - 1);
+    // A tap on a lane jumps straight to it; outside the board it steps by one.
+    const x = worldXFromClient(e.clientX, e.clientY);
+    if (x !== null && Math.abs(x) <= 3.5 * LANE_W) {
+      G.lane = Math.max(0, Math.min(LANES - 1, Math.round(x / LANE_W + 3)));
+    } else if (e.clientX < innerWidth / 2) G.lane = Math.max(0, G.lane - 1);
     else G.lane = Math.min(LANES - 1, G.lane + 1);
   }
 });
