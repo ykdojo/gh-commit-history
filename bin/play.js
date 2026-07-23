@@ -713,7 +713,10 @@ addEventListener('keydown', e => {
 
 // touch / click: tap the left or right half to step, or drag to steer directly
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-if (TOUCH) document.getElementById('keys').innerHTML = 'tap a lane or drag<br>to move';
+if (TOUCH) {
+  document.getElementById('keys').innerHTML = 'tap a lane or drag<br>to move';
+  document.getElementById('replay').textContent = 'tap to replay';
+}
 // Lane picking is by horizontal screen position only - tap height never matters.
 // Lane centers are projected to screen x once per resize (they sit at constant
 // depth, so their screen spacing is uniform).
