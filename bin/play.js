@@ -61,7 +61,7 @@ Controls:
   P                    Pause
   R                    Replay
 
-Grey penalty boxes drop on empty days (up to two a week) - catching one costs
+Red penalty boxes drop on empty days (up to two a week) - catching one costs
 a point.
 `;
 
@@ -372,7 +372,7 @@ const AUTOPILOT = params.get('autopilot') === '1';
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
 const SPAWN_Y = 9.2, FALL_SPEED = 2.85, PADDLE_TOP = 0.58;
-const PENALTY = '#545d68'; // dark grey penalty cubes on empty days (light enough to read on the bg)
+const PENALTY = '#da3633'; // red penalty cubes on empty days
 const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -632,7 +632,7 @@ function endGame() {
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
     G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected' +
-    (G.reds ? ' · -' + G.reds + ' from grey boxes' : '');
+    (G.reds ? ' · -' + G.reds + ' from red boxes' : '');
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
     const w = tot ? Math.round((got / tot) * 100) : 0;
