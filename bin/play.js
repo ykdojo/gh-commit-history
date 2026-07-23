@@ -372,7 +372,7 @@ const AUTOPILOT = params.get('autopilot') === '1';
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
 const SPAWN_Y = 9.2, FALL_SPEED = 2.85, PADDLE_TOP = 0.58;
-const PENALTY = '#67060c'; // dark red penalty cubes, same tone as the level-1 greens
+const PENALTY = '#a40e26'; // deep crimson penalty cubes - dark but unmissable
 const SPAWN_BASE = 0.3, SPAWN_PER_LANE = 0.1; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -430,19 +430,20 @@ const rim = new THREE.DirectionalLight('#58a6ff', 0.5);
 rim.position.set(-6, 4, -4);
 scene.add(rim);
 
-// a shallow platform under the play line instead of a deep receding floor
+// a slim platform hugging the play line - almost no apron in front of it
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(40, 6),
+  new THREE.PlaneGeometry(40, 2.6),
   new THREE.MeshStandardMaterial({ color: '#10151c', roughness: 0.95 })
 );
 floor.rotation.x = -Math.PI / 2;
+floor.position.z = -0.5;
 scene.add(floor);
 const laneMats = [];
 for (let i = 0; i < LANES; i++) {
   const m = new THREE.MeshBasicMaterial({ color: '#161b22', transparent: true, opacity: 0.6 });
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 5), m);
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 2.4), m);
   strip.rotation.x = -Math.PI / 2;
-  strip.position.set(laneX(i), 0.01, 0);
+  strip.position.set(laneX(i), 0.01, -0.5);
   scene.add(strip);
   laneMats.push(m);
 }
