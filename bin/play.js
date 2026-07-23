@@ -332,7 +332,8 @@ function renderHTML(payload) {
   #end .sub { color:var(--dim); font-size:14px; margin-bottom:18px; }
   .yrow { display:flex; align-items:center; gap:10px; font-size:13px; margin:6px 0; }
   .yrow .y { width:42px; color:var(--dim); }
-  .yrow .bar { flex:1; height:8px; background:#21262d; border-radius:4px; overflow:hidden; }
+  .yrow .barwrap { flex:1; }
+  .yrow .bar { display:block; height:8px; background:#21262d; border-radius:4px; overflow:hidden; }
   .yrow .bar i { display:block; height:100%; background:var(--green); border-radius:4px; }
   .yrow .v { width:108px; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
   #end .replay { margin-top:20px; text-align:center; color:var(--dim); font-size:13px; }
@@ -756,16 +757,18 @@ function endGame() {
   document.getElementById('endSub').textContent =
     G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions caught' +
     (G.reds ? ' · -' + G.reds + ' from reds' : '');
-  // Bars share one absolute scale: full track = the biggest year's total, so
-  // a bar's length is directly proportional to contributions caught. Tiny
-  // years all but disappear - that's honest.
+  // One absolute scale for everything: each year's grey track is sized to its
+  // total (relative to the biggest year) and the green fill to the fraction
+  // caught - so 7/7 in a tiny year reads as a tiny, completely full bar.
   const maxTot = Math.max(1, ...Object.keys(D.years).map(y => D.years[y].total));
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
+    const tw = Math.max(0, Math.min(100, Math.ceil((tot / maxTot) * 100))); // ceil: a nonzero year always shows a sliver
     // clamp: a negative width is invalid CSS and renders as a full bar
-    const w = Math.max(0, Math.min(100, Math.round((got / maxTot) * 100)));
-    return '<div class="yrow"><span class="y">' + y + '</span><span class="bar"><i style="width:' + w +
-      '%"></i></span><span class="v">' + got.toLocaleString() + ' / ' + tot.toLocaleString() + '</span></div>';
+    const fw = tot ? Math.max(0, Math.min(100, Math.round((got / tot) * 100))) : 0;
+    return '<div class="yrow"><span class="y">' + y + '</span><span class="barwrap"><span class="bar" style="width:' +
+      tw + '%"><i style="width:' + fw + '%"></i></span></span><span class="v">' +
+      got.toLocaleString() + ' / ' + tot.toLocaleString() + '</span></div>';
   }).join('');
   document.getElementById('endYears').innerHTML = rows;
   document.getElementById('end').style.display = 'flex';
