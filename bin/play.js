@@ -55,6 +55,9 @@ Options:
   -o, --output <path>  Output HTML path (default: ~/.gh-commit-history/<user>-play.html)
   --no-open            Don't auto-open the browser
   --no-cache           Skip cache, fetch everything fresh
+  --exclude-private    Keep private repo names out of the week labels and the
+                       generated HTML (contribution counts still include them),
+                       so the file is safe to share
   -h, --help           Show this help
 
 Controls:
@@ -66,7 +69,7 @@ a point.
 `;
 
 function parseArgs(argv) {
-  const opts = { username: null, years: null, output: null, open: true, cache: true };
+  const opts = { username: null, years: null, output: null, open: true, cache: true, includePrivate: true };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '-h' || a === '--help') opts.help = true;
@@ -74,6 +77,7 @@ function parseArgs(argv) {
     else if (a === '--output' || a === '-o') opts.output = argv[++i];
     else if (a === '--no-open') opts.open = false;
     else if (a === '--no-cache') opts.cache = false;
+    else if (a === '--exclude-private' || a === '--no-private') opts.includePrivate = false;
     else if (a.startsWith('-')) fail(`Unknown option: ${a}`);
     else fail('play always runs for your authenticated user - it cannot itemize private-repo activity for anyone else. Use `gh auth login` to switch accounts.');
   }
@@ -116,19 +120,19 @@ const REPO_QUERY = `query($login:String!,$from:DateTime!,$to:DateTime!){
   user(login:$login){
     contributionsCollection(from:$from,to:$to){
       commitContributionsByRepository(maxRepositories:100){
-        repository{ nameWithOwner }
+        repository{ nameWithOwner isPrivate }
         contributions(first:100){ nodes{ occurredAt commitCount } }
       }
       issueContributionsByRepository(maxRepositories:100){
-        repository{ nameWithOwner }
+        repository{ nameWithOwner isPrivate }
         contributions(first:100){ nodes{ occurredAt } }
       }
       pullRequestContributionsByRepository(maxRepositories:100){
-        repository{ nameWithOwner }
+        repository{ nameWithOwner isPrivate }
         contributions(first:100){ nodes{ occurredAt } }
       }
       pullRequestReviewContributionsByRepository(maxRepositories:100){
-        repository{ nameWithOwner }
+        repository{ nameWithOwner isPrivate }
         contributions(first:100){ nodes{ occurredAt } }
       }
     }
@@ -162,7 +166,8 @@ function fetchQuarter(login, q) {
     'pullRequestContributionsByRepository', 'pullRequestReviewContributionsByRepository']) {
     for (const r of col[key] || []) {
       const name = r.repository.nameWithOwner;
-      for (const n of r.contributions.nodes) entries.push([n.occurredAt.slice(0, 10), name, n.commitCount || 1]);
+      const priv = r.repository.isPrivate ? 1 : 0;
+      for (const n of r.contributions.nodes) entries.push([n.occurredAt.slice(0, 10), name, n.commitCount || 1, priv]);
     }
   }
   return entries;
@@ -220,16 +225,16 @@ function fetchCalendar(login, opts) {
   for (const [date, [count]] of dayMap) if (count > 0) qSet.add(quarterOf(date));
   const quarters = [...qSet].sort();
   const nowQ = quarterOf(now.toISOString().slice(0, 10));
-  // repoQuarters2: v2 includes issues/PRs/reviews, not just commits
-  cache.repoQuarters2 = cache.repoQuarters2 || {};
+  // repoQuarters3: v3 adds repo privacy so --exclude-private can filter
+  cache.repoQuarters3 = cache.repoQuarters3 || {};
   const repoDay = []; // [date, repo, contributions]
   let fetched = 0;
   for (const q of quarters) {
-    let entries = q !== nowQ && opts.cache ? cache.repoQuarters2[q] : null;
+    let entries = q !== nowQ && opts.cache ? cache.repoQuarters3[q] : null;
     if (!entries) {
       if (!fetched) process.stdout.write('  top repos: ');
       entries = fetchQuarter(login, q);
-      cache.repoQuarters2[q] = entries;
+      cache.repoQuarters3[q] = entries;
       fetched++;
       process.stdout.write('.');
       if (opts.cache) {
@@ -1100,7 +1105,8 @@ function main(argv) {
 
   // Attach each week's top repos (by commits) for the in-game label.
   const byWeek = {};
-  for (const [date, repo, commits] of repoDay) {
+  for (const [date, repo, commits, priv] of repoDay) {
+    if (!opts.includePrivate && priv) continue;
     const ws = weekStart(date);
     (byWeek[ws] = byWeek[ws] || {})[repo] = (byWeek[ws][repo] || 0) + commits;
   }
@@ -1122,6 +1128,7 @@ function main(argv) {
     const searchByWeek = {};
     for (const win of Object.values(chart.windows || {})) {
       for (const c of win.commits || []) {
+        if (!opts.includePrivate && c.priv) continue;
         const ws = weekStart(c.date);
         (searchByWeek[ws] = searchByWeek[ws] || {})[c.repo] = (searchByWeek[ws][c.repo] || 0) + 1;
       }
@@ -1134,6 +1141,7 @@ function main(argv) {
   } catch { /* no chart cache */ }
   if (filled) console.log(`  ${filled} week(s) labeled from the chart's commit-search cache (private repos)`);
   else if (!hadChartCache) console.log('  Tip: run `npx gh-commit-history` once to label private-repo weeks too.');
+  if (!opts.includePrivate) console.log('  Private repo names excluded from labels (counts still include them).');
   const grandTotal = Object.values(yearStats).reduce((a, y) => a + y.total, 0);
 
   const html = renderHTML({ login, weeks, years: yearStats });
