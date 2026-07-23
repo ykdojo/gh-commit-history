@@ -334,7 +334,7 @@ function renderHTML(payload) {
   .yrow .y { width:42px; color:var(--dim); }
   .yrow .bar { flex:1; height:8px; background:#21262d; border-radius:4px; overflow:hidden; }
   .yrow .bar i { display:block; height:100%; background:var(--green); border-radius:4px; }
-  .yrow .v { width:120px; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .yrow .v { width:108px; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
   #end .replay { margin-top:20px; text-align:center; color:var(--dim); font-size:13px; }
   .pop { position:fixed; z-index:15; font-weight:700; color:var(--green); font-size:18px; pointer-events:none;
     text-shadow:0 1px 6px rgba(0,0,0,.6); animation:rise .8s ease-out forwards; }
@@ -751,11 +751,14 @@ function endGame() {
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
     G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions caught' +
-    (G.reds ? ' · -' + G.reds + ' from red cubes' : '');
+    (G.reds ? ' · -' + G.reds + ' from reds' : '');
+  // Bars are absolute: the year with the most caught contributions spans the
+  // full track and the rest scale proportionally, so longer always means more.
+  const maxGot = Math.max(1, ...Object.keys(D.years).map(y => G.perYear[y] || 0));
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
     // clamp: a negative width is invalid CSS and renders as a full bar
-    const w = tot ? Math.max(0, Math.min(100, Math.round((got / tot) * 100))) : 0;
+    const w = Math.max(0, Math.min(100, Math.round((got / maxGot) * 100)));
     return '<div class="yrow"><span class="y">' + y + '</span><span class="bar"><i style="width:' + w +
       '%"></i></span><span class="v">' + got.toLocaleString() + ' / ' + tot.toLocaleString() + '</span></div>';
   }).join('');
