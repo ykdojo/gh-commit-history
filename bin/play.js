@@ -430,13 +430,13 @@ const rim = new THREE.DirectionalLight('#58a6ff', 0.5);
 rim.position.set(-6, 4, -4);
 scene.add(rim);
 
-// a slim platform hugging the play line - almost no apron in front of it
+// a slim platform hugging the play line, with a little room for the day markings
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(40, 2.6),
+  new THREE.PlaneGeometry(40, 3.0),
   new THREE.MeshStandardMaterial({ color: '#10151c', roughness: 0.95 })
 );
 floor.rotation.x = -Math.PI / 2;
-floor.position.z = -0.5;
+floor.position.z = -0.3;
 scene.add(floor);
 const laneMats = [];
 for (let i = 0; i < LANES; i++) {
@@ -448,21 +448,22 @@ for (let i = 0; i < LANES; i++) {
   laneMats.push(m);
 }
 
-// weekday markers on the ground in front of the paddle, leaned back so the
-// near-grazing camera can still read them; the active lane's letter brightens
+// weekday markers painted flat on the ground in front of the paddle, stretched
+// deep like road markings so the grazing camera angle reads them as letters;
+// the active lane's letter brightens
 const dayLabelMats = [];
 for (let i = 0; i < LANES; i++) {
   const cv = document.createElement('canvas');
   cv.width = 128; cv.height = 128;
   const cx = cv.getContext('2d');
-  cx.font = '700 84px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
+  cx.font = '700 96px -apple-system, "Segoe UI", Helvetica, Arial, sans-serif';
   cx.textAlign = 'center'; cx.textBaseline = 'middle';
   cx.fillStyle = '#ffffff';
   cx.fillText(DAY_NAMES[i][0], 64, 70);
   const m = new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true, opacity: 0.35, color: '#8b949e' });
-  const tile = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.4), m);
-  tile.position.set(laneX(i), 0.16, 0.8);
-  tile.rotation.x = -0.9;
+  const tile = new THREE.Mesh(new THREE.PlaneGeometry(0.42, 1.05), m);
+  tile.position.set(laneX(i), 0.02, 0.7);
+  tile.rotation.x = -Math.PI / 2;
   scene.add(tile);
   dayLabelMats.push(m);
 }
