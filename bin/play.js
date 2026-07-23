@@ -396,7 +396,11 @@ document.getElementById('boot').style.display = 'none';
 // hold their own next to the crimson penalty cubes
 const GREENS = [null, '#15653a', '#008a3f', '#26a641', '#39d353'];
 const FOOT = [0, 0.62, 0.74, 0.86, 0.98];   // cube footprint by level
-const TALL = [0, 0.50, 0.80, 1.15, 1.55];   // cube height by level - more contributions, taller cube
+// Height comes from the actual count, not the calendar level (quartiles are
+// relative, so level-based heights looked arbitrary): one contribution is a
+// true cube (height = footprint), each doubling adds 30%, capped so monster
+// days stay catchable.
+const cubeHeight = (f, count) => Math.min(1.65, f * (1 + 0.3 * Math.log2(Math.max(1, count))));
 
 const params = new URLSearchParams(location.search);
 const URL_SPEED = Math.max(0.25, Math.min(20, parseFloat(params.get('speed')) || 1));
@@ -640,7 +644,7 @@ function startEvent() {
 function spawnCube(q) {
   const mat = jellyMaterial(q.red ? PENALTY : GREENS[q.level]);
   const mesh = new THREE.Mesh(cubeGeo, mat);
-  const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : TALL[q.level];
+  const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : cubeHeight(f, q.count);
   const sy = G.weekSpawnY || SPAWN_Y;
   mesh.position.set(laneX(q.lane), sy, 0);
   scene.add(mesh);
