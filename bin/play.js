@@ -329,7 +329,6 @@ function renderHTML(payload) {
     background:rgba(13,17,23,.88); }
   #end .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 40px;
     max-width:520px; width:92%; max-height:80vh; overflow-y:auto; }
-  #end h1 { font-size:22px; margin-bottom:4px; }
   #end .pct { font-size:44px; font-weight:800; color:var(--green); margin:10px 0 2px; }
   #end .sub { color:var(--dim); font-size:14px; margin-bottom:18px; }
   .yrow { display:flex; align-items:center; gap:10px; font-size:13px; margin:6px 0; }
@@ -370,7 +369,7 @@ function renderHTML(payload) {
 <div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
 <div id="end"><div class="panel">
-  <h1 id="endTitle"></h1><div class="pct" id="endPct"></div><div class="sub" id="endSub"></div>
+  <div class="pct" id="endPct"></div><div class="sub" id="endSub"></div>
   <div id="endYears"></div><div class="replay" id="replay">press <kbd>R</kbd> to replay</div>
 </div></div>
 <script type="importmap">
@@ -710,10 +709,9 @@ function endGame() {
   G.done = true;
   G.state = 'end';
   const pct = grandTotal ? Math.round((G.score / grandTotal) * 1000) / 10 : 0;
-  document.getElementById('endTitle').textContent = D.login + "'s contribution catch";
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
-    G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected' +
+    G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions caught' +
     (G.reds ? ' · -' + G.reds + ' from red cubes' : '');
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
