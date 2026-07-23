@@ -392,15 +392,15 @@ window.__booted = true;
 document.getElementById('boot').style.display = 'none';
 
 // GitHub dark-theme contribution greens by level (1-4)
-// levels 1-2 run brighter than GitHub's calendar greens so the darkest cubes
-// hold their own next to the crimson penalty cubes
-const GREENS = [null, '#15653a', '#008a3f', '#26a641', '#39d353'];
+// levels 1-2 run brighter than GitHub's calendar greens - the darkest cube
+// carries the same punch (saturation/value) as the crimson penalty cubes
+const GREENS = [null, '#0e8f43', '#1b9c49', '#26a641', '#39d353'];
 const FOOT = [0, 0.62, 0.74, 0.86, 0.98];   // cube footprint by level
 // Height comes from the actual count, not the calendar level (quartiles are
 // relative, so level-based heights looked arbitrary): one contribution is a
 // true cube (height = footprint), each doubling adds 30%, capped so monster
 // days stay catchable.
-const cubeHeight = (f, count) => Math.min(1.65, f * (1 + 0.3 * Math.log2(Math.max(1, count))));
+const cubeHeight = (f, count) => Math.min(2, f * (1 + 0.3 * Math.log2(Math.max(1, count))));
 
 const params = new URLSearchParams(location.search);
 const URL_SPEED = Math.max(0.25, Math.min(20, parseFloat(params.get('speed')) || 1));
