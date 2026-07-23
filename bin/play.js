@@ -304,7 +304,7 @@ function renderHTML(payload) {
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
     line-height:1.5; }
-  #weeklabel small.priv { color:var(--dim); }
+  #weeklabel small.priv, #weeklabel small .more { color:var(--dim); }
   #weeklabel:empty { display:none; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
@@ -609,7 +609,7 @@ function startEvent() {
     });
     weekLabel.innerHTML = fmtWeek(w.s) +
       (w.r && w.r.length
-        ? '<small>' + w.r.join(' · ') + '</small>'
+        ? '<small>' + w.r.join(' · ') + (w.m ? '<span class="more"> +' + w.m + ' more</span>' : '') + '</small>'
         : '<small class="priv">private repos</small>');
     active.sort((a, b) => a.count - b.count || a.day - b.day);
     // Penalty cubes: up to two random empty days drop red boxes, mixed into the
@@ -1013,9 +1013,10 @@ function main(argv) {
   }
   const shortName = r => r.toLowerCase().startsWith(login.toLowerCase() + '/') ? r.slice(login.length + 1) : r;
   const topOf = m => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r]) => shortName(r));
+  const extraOf = m => Math.max(0, Object.keys(m).length - 3);
   for (const w of weeks) {
     const m = byWeek[w.s];
-    if (m) w.r = topOf(m);
+    if (m) { w.r = topOf(m); w.m = extraOf(m); }
   }
 
   // GraphQL won't itemize restricted private-org activity, but the commit search
@@ -1035,7 +1036,7 @@ function main(argv) {
     for (const w of weeks) {
       if (w.r && w.r.length) continue;
       const m = searchByWeek[w.s];
-      if (m) { w.r = topOf(m); filled++; }
+      if (m) { w.r = topOf(m); w.m = extraOf(m); filled++; }
     }
   } catch { /* no chart cache */ }
   if (filled) console.log(`  ${filled} week(s) labeled from the chart's commit-search cache (private repos)`);
