@@ -44,9 +44,10 @@ const HELP = `
 gh-commit-history play - catch your contribution squares as they fall
 
 Usage:
-  npx gh-commit-history play [username] [options]
+  npx gh-commit-history play [options]
 
-  Defaults to your authenticated GitHub user. Uses GitHub's official
+  Always runs for your authenticated GitHub user - that's the only account
+  whose private-repo activity the API will itemize. Uses GitHub's official
   contribution calendar (the profile green squares), fetched via gh.
 
 Options:
@@ -57,11 +58,10 @@ Options:
   -h, --help           Show this help
 
 Controls:
-  A/D or arrow keys    Step between the 7 weekday lanes
-  P                    Pause
-  R                    Replay
+  A/D or arrow keys    Step between the 7 weekday lanes (drag works too)
+  R                    Restart
 
-Red penalty boxes drop on empty days (up to two a week) - catching one costs
+Red penalty cubes drop on empty days (up to two a week) - catching one costs
 a point.
 `;
 
@@ -75,7 +75,7 @@ function parseArgs(argv) {
     else if (a === '--no-open') opts.open = false;
     else if (a === '--no-cache') opts.cache = false;
     else if (a.startsWith('-')) fail(`Unknown option: ${a}`);
-    else opts.username = a.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+    else fail('play always runs for your authenticated user - it cannot itemize private-repo activity for anyone else. Use `gh auth login` to switch accounts.');
   }
   return opts;
 }
@@ -303,31 +303,39 @@ function renderHTML(payload) {
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px;
     text-align:center; }
   #weeklabel small { display:block; font-size:11px; color:var(--green); margin-top:2px; max-width:70vw;
-    overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  #weeklabel small .pfx, #weeklabel small.priv { color:var(--dim); }
+    line-height:1.5; }
+  #weeklabel small.priv, #weeklabel small .more { color:var(--dim); }
   #weeklabel:empty { display:none; }
   #keys { top:18px; right:20px; font-size:12px; color:var(--dim); text-align:right; line-height:1.7;
     background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:8px 14px; }
   kbd { background:var(--panel); border:1px solid var(--border); border-bottom-width:2px; border-radius:4px;
     padding:0 5px; font-size:11px; color:var(--text); }
+  #keys .menulink { margin-top:2px; cursor:pointer; opacity:.5; font-size:13px; line-height:1.2; }
+  #keys .menulink:hover { opacity:1; }
+  #menu { right:20px; display:none; font-size:12px; color:var(--dim); text-align:right;
+    background:rgba(22,27,34,.85); border:1px solid var(--border); border-radius:10px; padding:4px 0; }
+  #menu .mi { padding:8px 16px; cursor:pointer; white-space:nowrap; }
+  #menu .mi:hover { color:var(--text); background:#1c2530; }
   #card { top:34%; left:50%; transform:translate(-50%,-50%) scale(.95); text-align:center; opacity:0;
     transition:opacity .3s, transform .3s; pointer-events:none; }
   #card.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
   #card .big { font-size:64px; font-weight:800; letter-spacing:-1px; }
   #card .sub { font-size:16px; color:var(--dim); margin-top:6px; }
+  #card .tag { font-size:15px; font-weight:600; color:var(--green); margin-top:10px; }
+  #card .tag:empty { display:none; }
   #timeline { position:fixed; left:0; right:0; bottom:0; z-index:9; display:block; }
   #end { position:fixed; inset:0; z-index:20; display:none; align-items:center; justify-content:center;
     background:rgba(13,17,23,.88); }
   #end .panel { background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 40px;
     max-width:520px; width:92%; max-height:80vh; overflow-y:auto; }
-  #end h1 { font-size:22px; margin-bottom:4px; }
   #end .pct { font-size:44px; font-weight:800; color:var(--green); margin:10px 0 2px; }
   #end .sub { color:var(--dim); font-size:14px; margin-bottom:18px; }
   .yrow { display:flex; align-items:center; gap:10px; font-size:13px; margin:6px 0; }
   .yrow .y { width:42px; color:var(--dim); }
-  .yrow .bar { flex:1; height:8px; background:#21262d; border-radius:4px; overflow:hidden; }
+  .yrow .barwrap { flex:1; }
+  .yrow .bar { display:block; height:8px; background:#21262d; border-radius:4px; overflow:hidden; }
   .yrow .bar i { display:block; height:100%; background:var(--green); border-radius:4px; }
-  .yrow .v { width:120px; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
+  .yrow .v { width:108px; text-align:right; color:var(--dim); font-variant-numeric:tabular-nums; }
   #end .replay { margin-top:20px; text-align:center; color:var(--dim); font-size:13px; }
   .pop { position:fixed; z-index:15; font-weight:700; color:var(--green); font-size:18px; pointer-events:none;
     text-shadow:0 1px 6px rgba(0,0,0,.6); animation:rise .8s ease-out forwards; }
@@ -340,10 +348,13 @@ function renderHTML(payload) {
     #score { top:10px; left:10px; padding:7px 12px; }
     #score .n { font-size:22px; }
     #score .sub { font-size:10px; }
-    #weeklabel { font-size:12px; padding:6px 10px; white-space:nowrap; }
+    #weeklabel { font-size:12px; padding:6px 10px; }
     #keys { top:10px; right:10px; font-size:10px; padding:6px 10px; }
+    #keys .menulink { font-size:12px; }
+    #menu { right:10px; font-size:10px; }
     #card .big { font-size:42px; }
     #card .sub { font-size:13px; }
+    #card .tag { font-size:13px; }
     #end .panel { padding:22px 20px; }
     .yrow .v { width:96px; font-size:11px; }
   }
@@ -353,12 +364,13 @@ function renderHTML(payload) {
 <canvas id="scene"></canvas>
 <div class="hud" id="score"><span class="n" id="scoreN">0</span><div class="sub" id="scoreSub"></div></div>
 <div class="hud" id="weeklabel"></div>
-<div class="hud" id="keys"><kbd>A</kbd> <kbd>D</kbd> move · <kbd>P</kbd> pause · <kbd>R</kbd> replay</div>
-<div class="hud" id="card"><div class="big"></div><div class="sub"></div></div>
+<div class="hud" id="keys"><span id="keyhint"><kbd>A</kbd> <kbd>D</kbd>, <kbd>←</kbd> <kbd>→</kbd> or drag to move</span><div class="menulink" id="menubtn">☰</div></div>
+<div class="hud" id="menu"><div class="mi" id="menuEnd">skip to recap</div><div class="mi" id="menuRestart">restart</div></div>
+<div class="hud" id="card"><div class="big"></div><div class="sub"></div><div class="tag"></div></div>
 <canvas id="timeline"></canvas>
 <div id="end"><div class="panel">
-  <h1 id="endTitle"></h1><div class="pct" id="endPct"></div><div class="sub" id="endSub"></div>
-  <div id="endYears"></div><div class="replay" id="replay">press <kbd>R</kbd> to replay</div>
+  <div class="pct" id="endPct"></div><div class="sub" id="endSub"></div>
+  <div id="endYears"></div><div class="replay" id="replay">press <kbd>R</kbd> to restart</div>
 </div></div>
 <script type="importmap">
 { "imports": {
@@ -381,9 +393,15 @@ window.__booted = true;
 document.getElementById('boot').style.display = 'none';
 
 // GitHub dark-theme contribution greens by level (1-4)
-const GREENS = [null, '#0e4429', '#006d32', '#26a641', '#39d353'];
+// levels 1-2 run brighter than GitHub's calendar greens - the darkest cube
+// carries the same punch (saturation/value) as the crimson penalty cubes
+const GREENS = [null, '#0e8f43', '#1b9c49', '#26a641', '#39d353'];
 const FOOT = [0, 0.62, 0.74, 0.86, 0.98];   // cube footprint by level
-const TALL = [0, 0.50, 0.80, 1.15, 1.55];   // cube height by level - more contributions, taller cube
+// Height comes from the actual count, not the calendar level (quartiles are
+// relative, so level-based heights looked arbitrary): one contribution is a
+// true cube (height = footprint), each doubling adds 30%, capped so monster
+// days stay catchable.
+const cubeHeight = (f, count) => Math.min(2, f * (1 + 0.3 * Math.log2(Math.max(1, count))));
 
 const params = new URLSearchParams(location.search);
 const URL_SPEED = Math.max(0.25, Math.min(20, parseFloat(params.get('speed')) || 1));
@@ -391,7 +409,7 @@ const AUTOPILOT = params.get('autopilot') === '1';
 
 const LANES = 7, LANE_W = 1.18;
 const laneX = i => (i - 3) * LANE_W;
-const SPAWN_Y = 9.2, FALL_SPEED = 3.4, PADDLE_TOP = 0.58;
+const SPAWN_Y = 10.4, FALL_SPEED = 3.4, PADDLE_TOP = 0.58;
 const PENALTY = '#a40e26'; // deep crimson penalty cubes - dark but unmissable
 const SPAWN_BASE = 0.26, SPAWN_PER_LANE = 0.08; // gap before each cube grows with lane distance
 const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
@@ -452,18 +470,19 @@ scene.add(rim);
 
 // a slim platform hugging the play line, with a little room for the day markings
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(40, 3.0),
+  new THREE.PlaneGeometry(40, 3.1),
   new THREE.MeshStandardMaterial({ color: '#10151c', roughness: 0.95 })
 );
 floor.rotation.x = -Math.PI / 2;
-floor.position.z = -0.3;
+floor.position.z = -0.25;
 scene.add(floor);
 const laneMats = [];
 for (let i = 0; i < LANES; i++) {
   const m = new THREE.MeshBasicMaterial({ color: '#161b22', transparent: true, opacity: 0.6 });
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 2.4), m);
+  // deep enough that the day letters (z 0.175..1.225) sit fully on the strip
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 2.95), m);
   strip.rotation.x = -Math.PI / 2;
-  strip.position.set(laneX(i), 0.01, -0.5);
+  strip.position.set(laneX(i), 0.01, -0.225);
   scene.add(strip);
   laneMats.push(m);
 }
@@ -495,6 +514,42 @@ paddleMat.opacity = 1;
 const paddle = new THREE.Mesh(new RoundedBoxGeometry(1.04, 0.22, 1.04, 3, 0.09), paddleMat);
 paddle.position.set(0, PADDLE_TOP - 0.13, 0);
 scene.add(paddle);
+
+// Green streak: catching greens without a red tints the paddle green and makes
+// it glow; once a streak is going, each catch throws off a burst of sparks.
+// Purely visual - the score is untouched.
+const PADDLE_BLUE = new THREE.Color('#58a6ff'), PADDLE_GLOW = new THREE.Color('#1f6feb');
+const STREAK_GREEN = new THREE.Color('#3fb950'), STREAK_GLOW = new THREE.Color('#2ea043');
+const SPARK_N = 256;
+const sparkPos = new Float32Array(SPARK_N * 3);
+const sparkVel = new Float32Array(SPARK_N * 3);
+const sparkLife = new Float32Array(SPARK_N); // <= 0 means dead
+for (let i = 0; i < SPARK_N; i++) sparkPos[i * 3 + 1] = -999;
+const sparkGeo = new THREE.BufferGeometry();
+sparkGeo.setAttribute('position', new THREE.BufferAttribute(sparkPos, 3));
+const sparks = new THREE.Points(sparkGeo, new THREE.PointsMaterial({
+  color: '#3fb950', size: 0.07, transparent: true, opacity: 0.9,
+}));
+sparks.frustumCulled = false;
+scene.add(sparks);
+let sparkI = 0, sparkAcc = 0;
+// One spark off the paddle, fountain-style: it spawns on the paddle's own
+// footprint and its velocity points outward from the paddle center - straight
+// up at the middle, arcing away at the edges. cone (0..1) makes the fountain
+// taller and wider as the streak grows.
+function emitSpark(x, cone) {
+  const i = sparkI = (sparkI + 1) % SPARK_N;
+  const ox = (Math.random() - 0.5) * 0.9, oz = (Math.random() - 0.5) * 0.9;
+  sparkPos[i * 3] = x + ox;
+  sparkPos[i * 3 + 1] = PADDLE_TOP + 0.05;
+  sparkPos[i * 3 + 2] = oz;
+  // dome: sparks near the paddle center jet highest, edge sparks arc lower
+  const centr = 1 - Math.min(1, Math.hypot(ox, oz) / 0.64);
+  sparkVel[i * 3] = (ox / 0.45) * (0.3 + 1.4 * cone) + (Math.random() - 0.5) * 0.15;
+  sparkVel[i * 3 + 1] = (1.2 + Math.random() * 0.4) * (1 + 0.9 * cone) * (0.72 + 0.55 * centr);
+  sparkVel[i * 3 + 2] = (oz / 0.45) * (0.2 + 0.7 * cone) + (Math.random() - 0.5) * 0.1;
+  sparkLife[i] = 0.65 + Math.random() * 0.45;
+}
 const paddleSpring = { x: 0, v: 0 }; // horizontal glide
 const paddleSquash = { x: 1, v: 0 };
 
@@ -508,14 +563,18 @@ function jellyMaterial(hex) {
   });
   mat.userData.uT = { value: 99 };
   mat.userData.uAmp = { value: 0 };
+  mat.userData.uKx = { value: 4.0 };
+  mat.userData.uKy = { value: 9.0 };
   mat.onBeforeCompile = shader => {
     shader.uniforms.uT = mat.userData.uT;
     shader.uniforms.uAmp = mat.userData.uAmp;
+    shader.uniforms.uKx = mat.userData.uKx;
+    shader.uniforms.uKy = mat.userData.uKy;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\\nuniform float uT; uniform float uAmp;')
+      .replace('#include <common>', '#include <common>\\nuniform float uT; uniform float uAmp; uniform float uKx; uniform float uKy;')
       .replace('#include <begin_vertex>', [
         '#include <begin_vertex>',
-        'float _w = sin(position.y * 9.0 + position.x * 4.0 - uT * 24.0) * exp(-4.5 * uT);',
+        'float _w = sin(position.y * uKy + position.x * uKx - uT * 24.0) * exp(-4.5 * uT);',
         'transformed += normal * (uAmp * _w);',
       ].join('\\n'));
   };
@@ -533,13 +592,12 @@ const G = {
   weekT: 0,
   cubes: [],
   lane: 3,
-  score: 0, caught: 0, missed: 0, reds: 0,
+  score: 0, caught: 0, missed: 0, reds: 0, streak: 0, glow: 0,
   perYear: {},         // year -> collected
   perWeekCollected: new Array(weeks.length).fill(0),
   playhead: 0,         // week index (fractional) for the timeline strip
   playheadTarget: 0,
   curWeek: -1,
-  paused: false,
   displayScore: 0,
   done: false,
 };
@@ -550,9 +608,10 @@ scoreSub.textContent = 'of ' + grandTotal.toLocaleString() + ' contributions · 
 const weekLabel = document.getElementById('weeklabel');
 const card = document.getElementById('card');
 
-function showCard(big, sub, dur) {
+function showCard(big, sub, dur, tag) {
   card.querySelector('.big').textContent = big;
   card.querySelector('.sub').textContent = sub;
+  card.querySelector('.tag').textContent = tag || '';
   card.classList.add('show');
   G.cardT = 0; G.cardDur = dur;
 }
@@ -569,8 +628,10 @@ function startEvent() {
   if (ev.type === 'year') {
     G.state = 'card';
     G.playheadTarget = ev.week;
+    const first = G.ei === 0;
     showCard(ev.year, 'active ' + ev.stats.active + ' week' + (ev.stats.active === 1 ? '' : 's') +
-      ' · ' + ev.stats.total.toLocaleString() + ' contributions', 1.5);
+      ' · ' + ev.stats.total.toLocaleString() + ' contributions', first ? 2.2 : 1.5,
+      first ? 'Catch your GitHub contributions!' : '');
   } else if (ev.type === 'gap') {
     G.state = 'card';
     G.playheadTarget = ev.to;
@@ -590,7 +651,7 @@ function startEvent() {
     });
     weekLabel.innerHTML = fmtWeek(w.s) +
       (w.r && w.r.length
-        ? '<small><span class="pfx">top: </span>' + w.r.join(' · ') + '</small>'
+        ? '<small>' + w.r.join(' · ') + (w.m ? '<span class="more"> +' + w.m + ' more</span>' : '') + '</small>'
         : '<small class="priv">private repos</small>');
     active.sort((a, b) => a.count - b.count || a.day - b.day);
     // Penalty cubes: up to two random empty days drop red boxes, mixed into the
@@ -613,14 +674,14 @@ function startEvent() {
     }
     // Quiet weeks spawn lower so a lone cube doesn't crawl down the whole screen.
     const n = G.spawnQ.length;
-    G.weekSpawnY = n <= 2 ? 6.6 : n <= 4 ? 8 : SPAWN_Y;
+    G.weekSpawnY = n <= 2 ? 7.5 : n <= 4 ? 9 : SPAWN_Y;
   }
 }
 
 function spawnCube(q) {
   const mat = jellyMaterial(q.red ? PENALTY : GREENS[q.level]);
   const mesh = new THREE.Mesh(cubeGeo, mat);
-  const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : TALL[q.level];
+  const f = q.red ? 0.6 : FOOT[q.level], h = q.red ? 0.6 : cubeHeight(f, q.count);
   const sy = G.weekSpawnY || SPAWN_Y;
   mesh.position.set(laneX(q.lane), sy, 0);
   scene.add(mesh);
@@ -633,7 +694,16 @@ function spawnCube(q) {
   G.cubes.push(c);
 }
 
-function wobble(c, amp) { c.mat.userData.uT.value = 0; c.mat.userData.uAmp.value = amp; }
+// amp is the max: each wobble gets a random strength (50-100%) and a random
+// wave direction so no two catches jiggle quite the same way
+function wobble(c, amp) { jiggle(c.mat, amp); }
+function jiggle(mat, amp) {
+  const a = Math.random() * Math.PI * 2, k = 9.85;
+  mat.userData.uKx.value = Math.cos(a) * k;
+  mat.userData.uKy.value = Math.sin(a) * k;
+  mat.userData.uT.value = 0;
+  mat.userData.uAmp.value = amp * (0.5 + Math.random() * 0.5);
+}
 
 function popText(worldPos, text, bad) {
   const v = worldPos.clone().project(camera);
@@ -648,18 +718,20 @@ function popText(worldPos, text, bad) {
 
 function catchCube(c) {
   c.state = 'caught'; c.t = 0;
-  c.sy.v = -14; c.sx.v = 8; c.sz.v = 8;
+  const sq = 0.7 + Math.random() * 0.3; // squash strength, current values as max
+  c.sy.v = -14 * sq; c.sx.v = 8 * sq; c.sz.v = 8 * sq;
   wobble(c, 0.12);
-  paddleSquash.v = -13;
-  paddleMat.userData.uT.value = 0;
-  paddleMat.userData.uAmp.value = 0.1;
+  paddleSquash.v = -13 * (0.7 + Math.random() * 0.3);
+  jiggle(paddleMat, 0.1);
   const y = weeks[c.week].s.slice(0, 4); // the cube's own week - it may outlive its week event
   if (c.red) {
+    G.streak = 0;
     G.score -= 1; G.reds++;
     G.perYear[y] = (G.perYear[y] || 0) - 1;
     popText(c.mesh.position, '-1', true);
     return;
   }
+  G.streak++;
   G.score += c.count; G.caught++;
   G.perYear[y] = (G.perYear[y] || 0) + c.count;
   G.perWeekCollected[c.week] += c.count;
@@ -668,9 +740,10 @@ function catchCube(c) {
 
 function missCube(c) {
   c.state = 'missed'; c.t = 0;
-  c.sy.v = -10; c.sx.v = 5; c.sz.v = 5;
+  const sq = 0.7 + Math.random() * 0.3;
+  c.sy.v = -10 * sq; c.sx.v = 5 * sq; c.sz.v = 5 * sq;
   wobble(c, 0.09);
-  if (!c.red) G.missed++; // letting a red one splat is the point
+  if (!c.red) { G.missed++; G.streak = 0; } // letting a red one splat is the point
   c.mat.color.set('#484f58');
   c.mat.emissiveIntensity = 0;
 }
@@ -680,34 +753,55 @@ function endGame() {
   G.done = true;
   G.state = 'end';
   const pct = grandTotal ? Math.round((G.score / grandTotal) * 1000) / 10 : 0;
-  document.getElementById('endTitle').textContent = D.login + "'s contribution catch";
   document.getElementById('endPct').textContent = pct + '%';
   document.getElementById('endSub').textContent =
-    G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions collected' +
-    (G.reds ? ' · -' + G.reds + ' from red boxes' : '');
+    G.score.toLocaleString() + ' of ' + grandTotal.toLocaleString() + ' contributions caught' +
+    (G.reds ? ' · -' + G.reds + ' from reds' : '');
+  // One absolute scale for everything: each year's grey track is sized to its
+  // total (relative to the biggest year) and the green fill to the fraction
+  // caught - so 7/7 in a tiny year reads as a tiny, completely full bar.
+  const maxTot = Math.max(1, ...Object.keys(D.years).map(y => D.years[y].total));
   const rows = Object.keys(D.years).sort().map(y => {
     const got = G.perYear[y] || 0, tot = D.years[y].total;
-    const w = tot ? Math.round((got / tot) * 100) : 0;
-    return '<div class="yrow"><span class="y">' + y + '</span><span class="bar"><i style="width:' + w +
-      '%"></i></span><span class="v">' + got.toLocaleString() + ' / ' + tot.toLocaleString() + '</span></div>';
+    const tw = Math.max(0, Math.min(100, Math.ceil((tot / maxTot) * 100))); // ceil: a nonzero year always shows a sliver
+    // clamp: a negative width is invalid CSS and renders as a full bar
+    const fw = tot ? Math.max(0, Math.min(100, Math.round((got / tot) * 100))) : 0;
+    return '<div class="yrow"><span class="y">' + y + '</span><span class="barwrap"><span class="bar" style="width:' +
+      tw + '%"><i style="width:' + fw + '%"></i></span></span><span class="v">' +
+      got.toLocaleString() + ' / ' + tot.toLocaleString() + '</span></div>';
   }).join('');
   document.getElementById('endYears').innerHTML = rows;
   document.getElementById('end').style.display = 'flex';
 }
 
 // ---- input ---------------------------------------------------------------
+// Holding a key auto-repeats: one step on press, then a short delay, then a
+// steady march - independent of the OS key-repeat rate.
+const HOLD_DELAY = 0.12, HOLD_STEP = 0.11;
+const hold = { dir: 0, t: 0 };
+function stepLane(dir) {
+  G.lane = dir < 0 ? Math.max(0, G.lane - 1) : Math.min(LANES - 1, G.lane + 1);
+}
 addEventListener('keydown', e => {
   if (e.repeat) return;
   const k = e.key.toLowerCase();
-  if (k === 'a' || k === 'arrowleft') G.lane = Math.max(0, G.lane - 1);
-  else if (k === 'd' || k === 'arrowright') G.lane = Math.min(LANES - 1, G.lane + 1);
-  else if (k === 'p') G.paused = !G.paused;
+  if (k === 'a' || k === 'arrowleft') { stepLane(-1); hold.dir = -1; hold.t = HOLD_DELAY; }
+  else if (k === 'd' || k === 'arrowright') { stepLane(1); hold.dir = 1; hold.t = HOLD_DELAY; }
   else if (k === 'r') location.reload();
 });
+addEventListener('keyup', e => {
+  const k = e.key.toLowerCase();
+  if ((k === 'a' || k === 'arrowleft') && hold.dir === -1) hold.dir = 0;
+  else if ((k === 'd' || k === 'arrowright') && hold.dir === 1) hold.dir = 0;
+});
+addEventListener('blur', () => { hold.dir = 0; });
 
 // touch / click: tap the left or right half to step, or drag to steer directly
 const TOUCH = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-if (TOUCH) document.getElementById('keys').innerHTML = 'tap a lane or drag<br>to move';
+if (TOUCH) {
+  document.getElementById('keyhint').innerHTML = 'tap a lane or drag<br>to move';
+  document.getElementById('replay').textContent = 'tap to restart';
+}
 // Lane picking is by horizontal screen position only - tap height never matters.
 // Lane centers are projected to screen x once per resize (they sit at constant
 // depth, so their screen spacing is uniform).
@@ -719,7 +813,7 @@ function computeLaneScreen() {
   laneScreenDX = ((b.x - a.x) * 0.5) * innerWidth;
   // Anchor the week label right below the playable area (the platform's front
   // edge), clamped so it never runs into the timeline strip.
-  const l = new THREE.Vector3(0, 0, 1.2).project(camera);
+  const l = new THREE.Vector3(0, 0, 1.3).project(camera);
   const py = (-l.y * 0.5 + 0.5) * (innerHeight - 8) + 6;
   weekLabel.style.top = Math.min(py, innerHeight - 74 - 70) + 'px';
 }
@@ -729,7 +823,7 @@ function laneFromClientX(cx) {
 }
 let drag = null;
 addEventListener('pointerdown', e => {
-  if (G.state === 'end' || (e.target.closest && e.target.closest('#end'))) return;
+  if (G.state === 'end' || (e.target.closest && e.target.closest('#end, #keys, #menu'))) return;
   drag = { x0: e.clientX, moved: false };
 });
 addEventListener('pointermove', e => {
@@ -742,14 +836,30 @@ addEventListener('pointerup', e => {
   const wasTap = !drag.moved;
   drag = null;
   if (wasTap && G.state !== 'end') {
-    // A tap in a column jumps straight to it; beyond the outer lanes it steps by one.
+    // A tap in a column jumps straight to it. Just past the outer lanes it snaps
+    // to the edge lane (near-misses shouldn't read as "step one"); only clearly
+    // far-out taps step by one.
+    const SNAP = 1.5; // lane-widths past the board edge that still snap
     const t = laneT(e.clientX);
     if (t >= -0.5 && t <= LANES - 0.5) G.lane = laneFromClientX(e.clientX);
+    else if (t >= -0.5 - SNAP && t < -0.5) G.lane = 0;
+    else if (t > LANES - 0.5 && t <= LANES - 0.5 + SNAP) G.lane = LANES - 1;
     else if (t < -0.5) G.lane = Math.max(0, G.lane - 1);
     else G.lane = Math.min(LANES - 1, G.lane + 1);
   }
 });
 document.getElementById('replay').addEventListener('click', () => location.reload());
+
+// menu: quick jump to the recap, or restart
+const menuBtn = document.getElementById('menubtn'), menuPanel = document.getElementById('menu');
+menuBtn.addEventListener('click', () => {
+  menuPanel.style.display = menuPanel.style.display === 'block' ? 'none' : 'block';
+});
+document.getElementById('menuEnd').addEventListener('click', () => { menuPanel.style.display = 'none'; endGame(); });
+document.getElementById('menuRestart').addEventListener('click', () => location.reload());
+function placeMenu() {
+  menuPanel.style.top = (document.getElementById('keys').getBoundingClientRect().bottom + 8) + 'px';
+}
 
 // autopilot (testing/demo): hop toward the closest green cube, dodge reds
 let apCool = 0;
@@ -830,6 +940,7 @@ function resize() {
   camera.fov = Math.min(100, Math.max(55, v));
   camera.updateProjectionMatrix();
   computeLaneScreen();
+  placeMenu();
 }
 addEventListener('resize', resize);
 resize();
@@ -839,7 +950,11 @@ function frame(now) {
   requestAnimationFrame(frame);
   let dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  if (G.paused) { renderer.render(scene, camera); return; }
+  // held-key auto-repeat runs on real time, not game speed
+  if (hold.dir) {
+    hold.t -= dt;
+    if (hold.t <= 0) { hold.t = HOLD_STEP; stepLane(hold.dir); }
+  }
   dt *= URL_SPEED;
 
   if (AUTOPILOT && G.state === 'week') autopilot(dt);
@@ -869,8 +984,36 @@ function frame(now) {
   paddle.position.x += paddleSpring.v * dt;
   spring(paddleSquash, dt, 160, 10);
   paddleMat.userData.uT.value += dt;
-  paddle.scale.set(2 - Math.min(paddleSquash.x, 1.4), Math.max(0.3, paddleSquash.x), 2 - Math.min(paddleSquash.x, 1.4));
-  paddle.scale.x = Math.max(0.6, Math.min(paddle.scale.x, 1.5));
+  // Streak glow eases toward green as greens stack up (full at 10); a drop or
+  // a red snaps the streak and the paddle fades back. At a full streak the
+  // paddle shimmers and sheds a steady drift of sparks - the earned reward.
+  G.glow += (Math.min(1, G.streak / 5) - G.glow) * Math.min(1, dt * 4);
+  paddleMat.color.copy(PADDLE_BLUE).lerp(STREAK_GREEN, G.glow);
+  paddleMat.emissive.copy(PADDLE_GLOW).lerp(STREAK_GLOW, G.glow);
+  // sparks start as a trickle at a streak of 5 (paddle is fully green by then)
+  // and grow denser with wider launch angles the longer the streak runs
+  const reward = Math.max(0, G.streak - 4);
+  const rate = Math.min(100, reward * 3);
+  const sparkCone = Math.min(1, reward / 12);
+  paddleMat.emissiveIntensity = 0.35 + 0.45 * G.glow +
+    (reward ? 0.18 * Math.min(1, reward / 6) * (0.5 + 0.5 * Math.sin(now * 0.007)) : 0);
+  sparkAcc += dt * rate;
+  while (sparkAcc >= 1) { sparkAcc -= 1; emitSpark(paddle.position.x, sparkCone); }
+  let sparkAlive = false;
+  for (let i = 0; i < SPARK_N; i++) {
+    if (sparkLife[i] <= 0) continue;
+    sparkAlive = true;
+    sparkLife[i] -= dt;
+    if (sparkLife[i] <= 0) { sparkPos[i * 3 + 1] = -999; continue; }
+    sparkVel[i * 3 + 1] -= 2.5 * dt;
+    sparkPos[i * 3] += sparkVel[i * 3] * dt;
+    sparkPos[i * 3 + 1] += sparkVel[i * 3 + 1] * dt;
+    sparkPos[i * 3 + 2] += sparkVel[i * 3 + 2] * dt;
+  }
+  if (sparkAlive) sparkGeo.attributes.position.needsUpdate = true;
+  const spread = 1 + (1 - Math.min(paddleSquash.x, 1.4)) * 0.45;
+  paddle.scale.set(spread, Math.max(0.3, paddleSquash.x), spread);
+  paddle.scale.x = Math.max(0.85, Math.min(paddle.scale.x, 1.2));
   paddle.scale.z = paddle.scale.x;
   for (let i = 0; i < LANES; i++) {
     laneMats[i].color.set(i === G.lane ? '#1c2530' : '#161b22');
@@ -919,6 +1062,7 @@ function frame(now) {
     const step = diff * Math.min(1, dt * 10);
     G.displayScore += diff > 0 ? Math.ceil(step) : Math.floor(step); // round away from zero so -1 registers
     scoreN.textContent = G.displayScore.toLocaleString();
+    scoreN.style.color = G.displayScore < 0 ? '#f85149' : ''; // penalty red below zero, CSS green otherwise
     scoreN.style.transform = 'scale(1.12)';
   } else scoreN.style.transform = 'scale(1)';
 
@@ -962,9 +1106,10 @@ function main(argv) {
   }
   const shortName = r => r.toLowerCase().startsWith(login.toLowerCase() + '/') ? r.slice(login.length + 1) : r;
   const topOf = m => Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([r]) => shortName(r));
+  const extraOf = m => Math.max(0, Object.keys(m).length - 3);
   for (const w of weeks) {
     const m = byWeek[w.s];
-    if (m) w.r = topOf(m);
+    if (m) { w.r = topOf(m); w.m = extraOf(m); }
   }
 
   // GraphQL won't itemize restricted private-org activity, but the commit search
@@ -984,7 +1129,7 @@ function main(argv) {
     for (const w of weeks) {
       if (w.r && w.r.length) continue;
       const m = searchByWeek[w.s];
-      if (m) { w.r = topOf(m); filled++; }
+      if (m) { w.r = topOf(m); w.m = extraOf(m); filled++; }
     }
   } catch { /* no chart cache */ }
   if (filled) console.log(`  ${filled} week(s) labeled from the chart's commit-search cache (private repos)`);
