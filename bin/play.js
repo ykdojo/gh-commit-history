@@ -463,18 +463,19 @@ scene.add(rim);
 
 // a slim platform hugging the play line, with a little room for the day markings
 const floor = new THREE.Mesh(
-  new THREE.PlaneGeometry(40, 3.0),
+  new THREE.PlaneGeometry(40, 3.1),
   new THREE.MeshStandardMaterial({ color: '#10151c', roughness: 0.95 })
 );
 floor.rotation.x = -Math.PI / 2;
-floor.position.z = -0.3;
+floor.position.z = -0.25;
 scene.add(floor);
 const laneMats = [];
 for (let i = 0; i < LANES; i++) {
   const m = new THREE.MeshBasicMaterial({ color: '#161b22', transparent: true, opacity: 0.6 });
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 2.4), m);
+  // deep enough that the day letters (z 0.175..1.225) sit fully on the strip
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(LANE_W - 0.14, 2.95), m);
   strip.rotation.x = -Math.PI / 2;
-  strip.position.set(laneX(i), 0.01, -0.5);
+  strip.position.set(laneX(i), 0.01, -0.225);
   scene.add(strip);
   laneMats.push(m);
 }
@@ -761,7 +762,7 @@ function computeLaneScreen() {
   laneScreenDX = ((b.x - a.x) * 0.5) * innerWidth;
   // Anchor the week label right below the playable area (the platform's front
   // edge), clamped so it never runs into the timeline strip.
-  const l = new THREE.Vector3(0, 0, 1.2).project(camera);
+  const l = new THREE.Vector3(0, 0, 1.3).project(camera);
   const py = (-l.y * 0.5 + 0.5) * (innerHeight - 8) + 6;
   weekLabel.style.top = Math.min(py, innerHeight - 74 - 70) + 'px';
 }
