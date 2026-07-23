@@ -392,7 +392,9 @@ window.__booted = true;
 document.getElementById('boot').style.display = 'none';
 
 // GitHub dark-theme contribution greens by level (1-4)
-const GREENS = [null, '#0e4429', '#006d32', '#26a641', '#39d353'];
+// levels 1-2 run brighter than GitHub's calendar greens so the darkest cubes
+// hold their own next to the crimson penalty cubes
+const GREENS = [null, '#15653a', '#008a3f', '#26a641', '#39d353'];
 const FOOT = [0, 0.62, 0.74, 0.86, 0.98];   // cube footprint by level
 const TALL = [0, 0.50, 0.80, 1.15, 1.55];   // cube height by level - more contributions, taller cube
 
