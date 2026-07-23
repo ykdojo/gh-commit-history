@@ -80,4 +80,4 @@ npx gh-commit-history play
 Your green squares fall from the sky as jelly cubes, week by week - move between the seven weekday lanes to catch them, and dodge the red penalty cubes. Runs for your authenticated user, private contributions included.
 
 - **A/D**, **← →** or drag to move; **R** restarts
-- `--years <n>` limits the range; see `play --help` for the rest
+- See `play --help` for the options
