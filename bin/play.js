@@ -542,8 +542,10 @@ function emitSpark(x, cone) {
   sparkPos[i * 3] = x + ox;
   sparkPos[i * 3 + 1] = PADDLE_TOP + 0.05;
   sparkPos[i * 3 + 2] = oz;
+  // dome: sparks near the paddle center jet highest, edge sparks arc lower
+  const centr = 1 - Math.min(1, Math.hypot(ox, oz) / 0.64);
   sparkVel[i * 3] = (ox / 0.45) * (0.35 + 2.0 * cone) + (Math.random() - 0.5) * 0.15;
-  sparkVel[i * 3 + 1] = (1.1 + Math.random() * 0.5) * (1 + 0.9 * cone);
+  sparkVel[i * 3 + 1] = (1.1 + Math.random() * 0.4) * (1 + 0.9 * cone) * (0.72 + 0.55 * centr);
   sparkVel[i * 3 + 2] = (oz / 0.45) * (0.25 + 0.9 * cone) + (Math.random() - 0.5) * 0.1;
   sparkLife[i] = 0.65 + Math.random() * 0.45;
 }
