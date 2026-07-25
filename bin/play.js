@@ -16,16 +16,58 @@ function fail(msg) {
   process.exit(1);
 }
 
+function sleepSync(ms) {
+  if (ms <= 0) return;
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, Math.ceil(ms));
+}
+
+// GitHub throttles GraphQL too, not just search, and a 403 here used to kill the
+// run outright - which stung most because the calendar and top-repos stages run
+// before the search stage's own backoff ever gets a chance to protect anything.
+const GH_MAX_ATTEMPTS = 6;
+const GH_BACKOFF_MS = 60000;
+
+function isRateLimited(text) {
+  return /rate limit|secondary rate|abuse detection|RATE_LIMITED/i.test(text) || /HTTP 403/.test(text);
+}
+
 function gh(args) {
-  try {
-    return execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
-  } catch (e) {
-    if (e.code === 'ENOENT') {
-      fail('GitHub CLI (gh) not found. Install it from https://cli.github.com/ and run `gh auth login`.');
+  let lastErr = '';
+  for (let attempt = 1; attempt <= GH_MAX_ATTEMPTS; attempt++) {
+    try {
+      // stdio pipes stderr instead of letting execFileSync forward it to our own
+      // stderr - otherwise gh's raw "HTTP 403" dump lands on screen mid-retry and
+      // a backoff that is working looks exactly like a crash.
+      const out = execFileSync('gh', args, {
+        encoding: 'utf8',
+        maxBuffer: 64 * 1024 * 1024,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      // GraphQL reports throttling as a 200 with an errors array, so a clean exit
+      // code is not on its own proof that the query succeeded.
+      if (isRateLimited(out) && /"errors"/.test(out)) {
+        lastErr = 'GraphQL rate limit';
+        waitForRateLimit(attempt);
+        continue;
+      }
+      return out;
+    } catch (e) {
+      if (e.code === 'ENOENT') {
+        fail('GitHub CLI (gh) not found. Install it from https://cli.github.com/ and run `gh auth login`.');
+      }
+      lastErr = ((e.stderr || '').toString() + (e.stdout || '').toString()).trim() || e.message || '';
+      if (!isRateLimited(lastErr)) fail(`gh command failed: ${lastErr}`);
+      waitForRateLimit(attempt);
     }
-    const stderr = (e.stderr || '').toString().trim();
-    fail(`gh command failed: ${stderr || e.message}`);
   }
+  fail(`Repeatedly rate-limited by the GitHub API. Try again in a few minutes. (${lastErr.split('\n')[0]})`);
+}
+
+// Always announce the wait on its own line. The search stage rewrites its progress
+// in place on a TTY, but a silent 60s pause reads as a hang, so this one stays put.
+function waitForRateLimit(attempt) {
+  console.log(`  Rate limited by GitHub - waiting ${GH_BACKOFF_MS / 1000}s before retry ${attempt}/${GH_MAX_ATTEMPTS}…`);
+  sleepSync(GH_BACKOFF_MS);
 }
 
 function resolveUsername(given) {
@@ -181,6 +223,19 @@ function fetchQuarter(login, q) {
 
 function cachePath(login) { return path.join(CACHE_DIR, `${login}-play.json`); }
 
+// Write to a sibling temp file and rename over the real one. rename(2) is atomic
+// within a directory, so a Ctrl-C landing mid-write leaves the previous cache
+// intact instead of truncating it - which matters because a half-written file
+// fails JSON.parse and the reader silently starts over from scratch, throwing
+// away every quarter already paid for.
+function saveCache(login, cache) {
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  const dest = cachePath(login);
+  const tmp = `${dest}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify(cache));
+  fs.renameSync(tmp, dest);
+}
+
 function fetchCalendar(login, opts) {
   const now = new Date();
   const createdRaw = gh(['api', `users/${login}`, '--jq', '.created_at']).trim();
@@ -211,8 +266,7 @@ function fetchCalendar(login, opts) {
       days = fetchYear(login, y, y === nowYear ? now.toISOString() : null);
       cache.years[y] = days;
       if (opts.cache) {
-        fs.mkdirSync(CACHE_DIR, { recursive: true });
-        fs.writeFileSync(cachePath(login), JSON.stringify(cache));
+        saveCache(login, cache);
       }
       const total = days.reduce((a, d) => a + d[1], 0);
       console.log(`  ${y}: ${total.toLocaleString()} contributions`);
@@ -254,8 +308,7 @@ function fetchCalendar(login, opts) {
       cache.repoQuarters4[q] = got;
       if (!isTty) process.stdout.write('.');
       if (opts.cache) {
-        fs.mkdirSync(CACHE_DIR, { recursive: true });
-        fs.writeFileSync(cachePath(login), JSON.stringify(cache));
+        saveCache(login, cache);
       }
     }
     graphByQuarter[q] = got;
@@ -267,14 +320,24 @@ function fetchCalendar(login, opts) {
 
   const searchByQuarter = fetchPrivateLabels(login, quarters, graphByQuarter, nowQ, cache, opts);
 
-  // A searched quarter's commits are the complete picture (GraphQL leaves private
-  // repos out entirely), so they replace that quarter's GraphQL entries rather
-  // than adding to them - otherwise every public commit would count twice.
+  // A searched quarter's commits mostly supersede GraphQL's (GraphQL leaves private
+  // repos out entirely), so search wins rather than adding to them - otherwise every
+  // public commit would count twice. But search is not strictly a superset: it misses
+  // commits GraphQL can see, typically in older repos or where the commit's author
+  // email was never linked to the account. Those weeks used to fall through to the
+  // "private repos" placeholder even though GraphQL had named the repo all along.
+  // So the merge is per week: search wins for any week it found commits in, and weeks
+  // it left empty fall back to GraphQL. Splitting on the week boundary is what keeps
+  // the two sources from ever mixing inside one week, which is the double-count case.
   const repoDay = []; // [date, repo, contributions, priv]
   for (const q of quarters) {
     const hits = searchByQuarter[q];
-    if (hits) repoDay.push(...hits.map((c) => [c.date, c.repo, 1, c.priv ? 1 : 0]));
-    else repoDay.push(...graphByQuarter[q].entries);
+    if (!hits) { repoDay.push(...graphByQuarter[q].entries); continue; }
+    repoDay.push(...hits.map((c) => [c.date, c.repo, 1, c.priv ? 1 : 0]));
+    const searchedWeeks = new Set(hits.map((c) => weekStart(c.date)));
+    for (const e of graphByQuarter[q].entries) {
+      if (!searchedWeeks.has(weekStart(e[0]))) repoDay.push(e);
+    }
   }
   return { dayMap, repoDay };
 }
@@ -319,8 +382,7 @@ function fetchPrivateLabels(login, quarters, graphByQuarter, nowQ, cache, opts) 
     cache.searchQuarters[q] = { scope: want, commits };
     process.stdout.write(isTty ? `\r${label}: ${commits.length} commits\x1b[K\n` : `${label}: ${commits.length} commits\n`);
     if (opts.cache) {
-      fs.mkdirSync(CACHE_DIR, { recursive: true });
-      fs.writeFileSync(cachePath(login), JSON.stringify(cache));
+      saveCache(login, cache);
     }
   }
   return out;
