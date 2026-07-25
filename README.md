@@ -77,6 +77,8 @@ Turn your contribution graph into a game:
 npx gh-commit-history play
 ```
 
+https://github.com/user-attachments/assets/a286b862-dce2-4c62-89a8-078b2af3fe79
+
 Your green squares fall from the sky as jelly cubes, week by week - move between the seven weekday lanes to catch them, and dodge the red penalty cubes. Runs for your authenticated user, private contributions included by default.
 
 Week labels name your top repos, private ones included. GitHub's contributions API counts private activity but won't say where it happened, so those weeks are labeled from the commit search API instead - which is rate-limited, and adds a few minutes to the first run for a long history. Cached afterwards.
