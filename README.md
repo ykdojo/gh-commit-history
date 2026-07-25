@@ -79,7 +79,9 @@ npx gh-commit-history play
 
 Your green squares fall from the sky as jelly cubes, week by week - move between the seven weekday lanes to catch them, and dodge the red penalty cubes. Runs for your authenticated user, private contributions included by default.
 
-- `--exclude-private` hides private repo names
+Week labels name your top repos, private ones included. GitHub's contributions API counts private activity but won't say where it happened, so those weeks are labeled from the commit search API instead - which is rate-limited, and adds a few minutes to the first run for a long history. Cached afterwards.
+
+- `--exclude-private` keeps private repo names out of the labels and the generated HTML, so the file is safe to share. It also skips searching for them, so it runs faster
 - See `play --help` for the rest
 - Demo: [ykdojo.github.io/gh-commit-history](https://ykdojo.github.io/gh-commit-history/)
 - Source: [`bin/play.js`](bin/play.js)
