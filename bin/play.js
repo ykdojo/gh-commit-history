@@ -237,15 +237,22 @@ function fetchCalendar(login, opts) {
   delete cache.repoQuarters3;
   cache.repoQuarters4 = cache.repoQuarters4 || {};
   const graphByQuarter = {};
+  const cached = (q) => (q !== nowQ && opts.cache ? cache.repoQuarters4[q] : null);
+  // Count the work up front so the progress line can name a real total instead
+  // of trickling out anonymous dots for a minute.
+  const todo = quarters.filter((q) => !cached(q));
+  const isTty = !!process.stdout.isTTY;
   let fetched = 0;
   for (const q of quarters) {
-    let got = q !== nowQ && opts.cache ? cache.repoQuarters4[q] : null;
+    let got = cached(q);
     if (!got) {
-      if (!fetched) process.stdout.write('  top repos: ');
+      fetched++;
+      // Rewrite in place on a TTY; when piped, one dot per quarter keeps logs short.
+      if (isTty) process.stdout.write(`\r  top repos: ${q} (${fetched}/${todo.length})\x1b[K`);
+      else if (fetched === 1) process.stdout.write('  top repos: ');
       got = fetchQuarter(login, q);
       cache.repoQuarters4[q] = got;
-      fetched++;
-      process.stdout.write('.');
+      if (!isTty) process.stdout.write('.');
       if (opts.cache) {
         fs.mkdirSync(CACHE_DIR, { recursive: true });
         fs.writeFileSync(cachePath(login), JSON.stringify(cache));
@@ -253,7 +260,10 @@ function fetchCalendar(login, opts) {
     }
     graphByQuarter[q] = got;
   }
-  if (fetched) console.log(` ${fetched} quarter(s) fetched`);
+  if (fetched) {
+    if (isTty) process.stdout.write('\r\x1b[K');
+    console.log(`${isTty ? '  top repos:' : ''} ${fetched} quarter(s) fetched`);
+  }
 
   const searchByQuarter = fetchPrivateLabels(login, quarters, graphByQuarter, nowQ, cache, opts);
 
