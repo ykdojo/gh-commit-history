@@ -56,6 +56,10 @@ function gh(args) {
         fail('GitHub CLI (gh) not found. Install it from https://cli.github.com/ and run `gh auth login`.');
       }
       lastErr = ((e.stderr || '').toString() + (e.stdout || '').toString()).trim() || e.message || '';
+      // Retrying a logged-out gh just repeats the same failure, so name it and stop.
+      if (/gh auth login/i.test(lastErr)) {
+        fail('GitHub CLI is not logged in. Run `gh auth login` (or set GH_TOKEN) and try again.');
+      }
       if (!isRateLimited(lastErr)) fail(`gh command failed: ${lastErr}`);
       waitForRateLimit(attempt);
     }
