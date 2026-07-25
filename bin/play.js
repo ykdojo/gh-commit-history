@@ -324,8 +324,8 @@ function renderHTML(payload) {
   #card { top:34%; left:50%; transform:translate(-50%,-50%) scale(.95); text-align:center; opacity:0;
     transition:opacity .3s, transform .3s; pointer-events:none; }
   #card.show { opacity:1; transform:translate(-50%,-50%) scale(1); }
-  #card .big { font-size:64px; font-weight:800; letter-spacing:-1px; }
-  #card .sub { font-size:16px; color:var(--dim); margin-top:6px; }
+  #card .big { font-size:64px; font-weight:800; letter-spacing:-1px; white-space:nowrap; }
+  #card .sub { font-size:16px; color:var(--dim); margin-top:6px; white-space:pre-line; line-height:1.5; }
   #card .tag { font-size:15px; font-weight:600; color:var(--green); margin-top:10px; }
   #card .tag:empty { display:none; }
   #timeline { position:fixed; left:0; right:0; bottom:0; z-index:9; display:block; }
@@ -421,29 +421,28 @@ const GAP_MIN = 4; // runs of >= this many empty weeks get a narration card
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
-// ---- timeline events: year cards, gap cards, playable weeks -------------
+// ---- timeline events: one intro card, gap cards, playable weeks ----------
+// No per-year cards: the run plays straight through, so a quiet stretch that
+// spans New Year's is one gap card instead of two split at the boundary.
 const weeks = D.weeks;
 const weekTotal = w => w.d.reduce((a, x) => a + x[0], 0);
-const events = [];
+const events = [{ type: 'intro' }];
 {
-  let curYear = null, gap = 0, gapFrom = 0;
+  let gap = 0, gapFrom = 0;
   const flushGap = end => {
     if (gap >= GAP_MIN) events.push({ type: 'gap', n: gap, from: gapFrom, to: end });
     gap = 0;
   };
   weeks.forEach((w, i) => {
-    const y = w.s.slice(0, 4);
-    if (y !== curYear) {
-      flushGap(i);
-      if (D.years[y]) events.push({ type: 'year', year: y, stats: D.years[y], week: i });
-      curYear = y;
-    }
     if (weekTotal(w) === 0) { if (gap === 0) gapFrom = i; gap++; return; }
     flushGap(i);
     events.push({ type: 'week', week: i });
   });
 }
 const grandTotal = weeks.reduce((a, w) => a + weekTotal(w), 0);
+const YEARS = Object.keys(D.years).sort();
+const SPAN = YEARS.length > 1 ? YEARS[0] + ' - ' + YEARS[YEARS.length - 1] : YEARS[0];
+const ACTIVE_WEEKS = YEARS.reduce((a, y) => a + D.years[y].active, 0);
 
 // ---- three.js scene ------------------------------------------------------
 const canvas = document.getElementById('scene');
@@ -630,13 +629,12 @@ function startEvent() {
   // Out of events: let the last cubes land before showing the recap.
   if (G.ei >= events.length) { G.state = 'drain'; return; }
   const ev = events[G.ei];
-  if (ev.type === 'year') {
+  if (ev.type === 'intro') {
     G.state = 'card';
-    G.playheadTarget = ev.week;
-    const first = G.ei === 0;
-    showCard(ev.year, 'active ' + ev.stats.active + ' week' + (ev.stats.active === 1 ? '' : 's') +
-      ' · ' + ev.stats.total.toLocaleString() + ' contributions', first ? 2.2 : 1.5,
-      first ? 'Catch your GitHub contributions!' : '');
+    G.playheadTarget = 0;
+    showCard(SPAN, 'active ' + ACTIVE_WEEKS + ' week' + (ACTIVE_WEEKS === 1 ? '' : 's') +
+      '\\n' + grandTotal.toLocaleString() + ' contributions', 2.2,
+      'Catch your GitHub contributions!');
   } else if (ev.type === 'gap') {
     G.state = 'card';
     G.playheadTarget = ev.to;
