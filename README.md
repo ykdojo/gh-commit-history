@@ -81,3 +81,4 @@ Your green squares fall from the sky as jelly cubes, week by week - move between
 
 - `--exclude-private` hides private repo names
 - See `play --help` for the rest
+- Source: [`bin/play.js`](bin/play.js)
