@@ -38,28 +38,39 @@ function visibilityQualifier(visibility) {
   return '';
 }
 
+// A 60s pause with no output reads as a hang, and report() is a no-op when stdout
+// isn't a TTY - so the backoff gets its own permanent line either way. On a TTY the
+// in-place progress line is cleared first so the notice doesn't land on top of it.
+function noticeBackoff(attempt) {
+  if (process.stdout.isTTY) process.stdout.write('\r\x1b[K');
+  console.log(`  Rate limited by GitHub - waiting 60s before retry ${attempt + 1}/${MAX_ATTEMPTS}…`);
+}
+
 function searchPage(login, from, to, page, visibility, report) {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const wait = lastSearch + SEARCH_GAP - Date.now();
     if (wait > 0) sleepSync(wait);
     lastSearch = Date.now();
     try {
+      // stdio pipes stderr rather than letting execFileSync forward it to ours,
+      // so gh's raw "HTTP 403" dump doesn't print mid-retry and make a working
+      // backoff look like a crash.
       const raw = execFileSync('gh', [
         'api', '-X', 'GET', 'search/commits',
         '-f', `q=author:${login} author-date:${from}..${to}${visibilityQualifier(visibility)}`,
         '-f', 'per_page=100', '-f', `page=${page}`,
         '-f', 'sort=author-date', '-f', 'order=desc',
-      ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
+      ], { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024, stdio: ['ignore', 'pipe', 'pipe'] });
       const json = JSON.parse(raw);
       if (json.message && json.total_count === undefined) {
-        if (/rate limit/i.test(json.message)) { report('rate limited - waiting ~60s'); sleepSync(60000); continue; }
+        if (/rate limit/i.test(json.message)) { noticeBackoff(attempt); sleepSync(60000); continue; }
         throw new Error(`Search API error: ${json.message}`);
       }
       return json;
     } catch (e) {
       if (e.code === 'ENOENT') throw new Error('GitHub CLI (gh) not found. Install from https://cli.github.com/ and run `gh auth login`.');
-      const msg = (e.stderr || '').toString() || e.message || '';
-      if (/rate limit/i.test(msg) || /HTTP 403/.test(msg)) { report('rate limited - waiting ~60s'); sleepSync(60000); continue; }
+      const msg = ((e.stderr || '').toString() + (e.stdout || '').toString()) || e.message || '';
+      if (/rate limit|secondary rate|abuse detection/i.test(msg) || /HTTP 403/.test(msg)) { noticeBackoff(attempt); sleepSync(60000); continue; }
       throw new Error(`gh command failed: ${msg}`);
     }
   }
