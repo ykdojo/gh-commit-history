@@ -57,7 +57,8 @@ Options:
   --no-cache           Skip cache, fetch everything fresh
   --exclude-private    Keep private repo names out of the week labels and the
                        generated HTML (contribution counts still include them),
-                       so the file is safe to share
+                       so the file is safe to share. Also skips searching for
+                       them, so it runs faster.
   -h, --help           Show this help
 
 Controls:
@@ -89,6 +90,8 @@ function parseArgs(argv) {
 // ---------------------------------------------------------------------------
 const LEVELS = { NONE: 0, FIRST_QUARTILE: 1, SECOND_QUARTILE: 2, THIRD_QUARTILE: 3, FOURTH_QUARTILE: 4 };
 
+const { fetchCommits, dedupe } = require('./search');
+
 const CAL_QUERY = `query($login:String!,$from:DateTime!,$to:DateTime!){
   user(login:$login){
     contributionsCollection(from:$from,to:$to){
@@ -119,6 +122,7 @@ function fetchYear(login, year, toDate) {
 const REPO_QUERY = `query($login:String!,$from:DateTime!,$to:DateTime!){
   user(login:$login){
     contributionsCollection(from:$from,to:$to){
+      restrictedContributionsCount
       commitContributionsByRepository(maxRepositories:100){
         repository{ nameWithOwner isPrivate }
         contributions(first:100){ nodes{ occurredAt commitCount } }
@@ -170,7 +174,9 @@ function fetchQuarter(login, q) {
       for (const n of r.contributions.nodes) entries.push([n.occurredAt.slice(0, 10), name, n.commitCount || 1, priv]);
     }
   }
-  return entries;
+  // restricted = activity GraphQL counted but refused to name (private repos).
+  // Zero means this quarter is fully itemized above and needs no commit search.
+  return { entries, restricted: col.restrictedContributionsCount || 0 };
 }
 
 function cachePath(login) { return path.join(CACHE_DIR, `${login}-play.json`); }
@@ -225,16 +231,16 @@ function fetchCalendar(login, opts) {
   for (const [date, [count]] of dayMap) if (count > 0) qSet.add(quarterOf(date));
   const quarters = [...qSet].sort();
   const nowQ = quarterOf(now.toISOString().slice(0, 10));
-  // repoQuarters3: v3 adds repo privacy so --exclude-private can filter
-  cache.repoQuarters3 = cache.repoQuarters3 || {};
-  const repoDay = []; // [date, repo, contributions]
+  // repoQuarters4: v4 stores restrictedContributionsCount alongside the entries
+  cache.repoQuarters4 = cache.repoQuarters4 || {};
+  const graphByQuarter = {};
   let fetched = 0;
   for (const q of quarters) {
-    let entries = q !== nowQ && opts.cache ? cache.repoQuarters3[q] : null;
-    if (!entries) {
+    let got = q !== nowQ && opts.cache ? cache.repoQuarters4[q] : null;
+    if (!got) {
       if (!fetched) process.stdout.write('  top repos: ');
-      entries = fetchQuarter(login, q);
-      cache.repoQuarters3[q] = entries;
+      got = fetchQuarter(login, q);
+      cache.repoQuarters4[q] = got;
       fetched++;
       process.stdout.write('.');
       if (opts.cache) {
@@ -242,10 +248,66 @@ function fetchCalendar(login, opts) {
         fs.writeFileSync(cachePath(login), JSON.stringify(cache));
       }
     }
-    repoDay.push(...entries);
+    graphByQuarter[q] = got;
   }
   if (fetched) console.log(` ${fetched} quarter(s) fetched`);
+
+  const searchByQuarter = fetchPrivateLabels(login, quarters, graphByQuarter, nowQ, cache, opts);
+
+  // A searched quarter's commits are the complete picture (GraphQL leaves private
+  // repos out entirely), so they replace that quarter's GraphQL entries rather
+  // than adding to them - otherwise every public commit would count twice.
+  const repoDay = []; // [date, repo, contributions, priv]
+  for (const q of quarters) {
+    const hits = searchByQuarter[q];
+    if (hits) repoDay.push(...hits.map((c) => [c.date, c.repo, 1, c.priv ? 1 : 0]));
+    else repoDay.push(...graphByQuarter[q].entries);
+  }
   return { dayMap, repoDay };
+}
+
+// Commit search over the quarters GraphQL couldn't fully itemize. Quarters with
+// restricted === 0 are already complete, so they cost nothing here.
+function fetchPrivateLabels(login, quarters, graphByQuarter, nowQ, cache, opts) {
+  const want = opts.includePrivate ? 'all' : 'public';
+  cache.searchQuarters = cache.searchQuarters || {};
+  const out = {};
+  const todo = [];
+
+  for (const q of quarters) {
+    if (!(graphByQuarter[q].restricted > 0)) continue; // fully public: GraphQL already named every repo
+    const hit = q !== nowQ && opts.cache ? cache.searchQuarters[q] : null;
+    // An 'all' cache satisfies both modes; a 'public' cache only satisfies --exclude-private.
+    if (hit && (hit.scope === 'all' || hit.scope === want)) { out[q] = hit.commits; continue; }
+    todo.push({ q, topUp: !!(hit && hit.scope === 'public' && want === 'all') });
+  }
+  if (!todo.length) return out;
+
+  console.log(`  Naming private-repo weeks: ${todo.length} quarter(s) to search (~3s per 100 commits).`);
+  let done = 0;
+  for (const { q, topUp } of todo) {
+    const [from, to] = quarterRange(q);
+    const label = `  ${q} (${++done}/${todo.length})`;
+    // Rewrite the line in place on a TTY; when piped, stay quiet so logs don't
+    // fill with escape codes and a line per page.
+    const isTty = !!process.stdout.isTTY;
+    const report = (msg) => { if (isTty) process.stdout.write(`\r${label}: ${msg}\x1b[K`); };
+    // Topping up only fetches the half the cache is missing; the public pages
+    // already paid for are kept and the two halves are re-deduped as one set.
+    const found = fetchCommits(login, from.slice(0, 10), to.slice(0, 10), {
+      visibility: topUp ? 'private' : want,
+      onProgress: report,
+    });
+    const commits = topUp ? dedupe(cache.searchQuarters[q].commits.concat(found), login) : found;
+    out[q] = commits;
+    cache.searchQuarters[q] = { scope: want, commits };
+    process.stdout.write(isTty ? `\r${label}: ${commits.length} commits\x1b[K\n` : `${label}: ${commits.length} commits\n`);
+    if (opts.cache) {
+      fs.mkdirSync(CACHE_DIR, { recursive: true });
+      fs.writeFileSync(cachePath(login), JSON.stringify(cache));
+    }
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -1119,10 +1181,9 @@ function main(argv) {
   // GraphQL won't itemize restricted private-org activity, but the commit search
   // API does - and the main chart command caches it per repo and day. Reuse that
   // cache to label the weeks GraphQL left blank.
-  let filled = 0, hadChartCache = false;
+  let filled = 0;
   try {
     const chart = JSON.parse(fs.readFileSync(path.join(CACHE_DIR, `${login}.json`), 'utf8'));
-    hadChartCache = true;
     const searchByWeek = {};
     for (const win of Object.values(chart.windows || {})) {
       for (const c of win.commits || []) {
@@ -1137,8 +1198,7 @@ function main(argv) {
       if (m) { w.r = topOf(m); w.m = extraOf(m); filled++; }
     }
   } catch { /* no chart cache */ }
-  if (filled) console.log(`  ${filled} week(s) labeled from the chart's commit-search cache (private repos)`);
-  else if (!hadChartCache) console.log('  Tip: run `npx gh-commit-history` once to label private-repo weeks too.');
+  if (filled) console.log(`  ${filled} more week(s) labeled from the chart command's cache`);
   if (!opts.includePrivate) console.log('  Private repo names excluded from labels (counts still include them).');
   const grandTotal = Object.values(yearStats).reduce((a, y) => a + y.total, 0);
 
