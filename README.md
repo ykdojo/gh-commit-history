@@ -81,4 +81,5 @@ Your green squares fall from the sky as jelly cubes, week by week - move between
 
 - `--exclude-private` hides private repo names
 - See `play --help` for the rest
+- Demo: [ykdojo.github.io/gh-commit-history](https://ykdojo.github.io/gh-commit-history/)
 - Source: [`bin/play.js`](bin/play.js)
