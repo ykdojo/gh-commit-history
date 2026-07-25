@@ -231,7 +231,10 @@ function fetchCalendar(login, opts) {
   for (const [date, [count]] of dayMap) if (count > 0) qSet.add(quarterOf(date));
   const quarters = [...qSet].sort();
   const nowQ = quarterOf(now.toISOString().slice(0, 10));
-  // repoQuarters4: v4 stores restrictedContributionsCount alongside the entries
+  // repoQuarters4: v4 stores restrictedContributionsCount alongside the entries.
+  // The v3 entries can't be upgraded in place (they never recorded the count),
+  // so drop them rather than carrying a dead copy in the file forever.
+  delete cache.repoQuarters3;
   cache.repoQuarters4 = cache.repoQuarters4 || {};
   const graphByQuarter = {};
   let fetched = 0;
