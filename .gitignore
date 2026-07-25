@@ -1,4 +1,5 @@
 node_modules/
 *.html
+!docs/index.html
 .DS_Store
 .playwright-mcp/
