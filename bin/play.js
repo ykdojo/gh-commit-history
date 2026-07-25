@@ -296,7 +296,10 @@ function fetchPrivateLabels(login, quarters, graphByQuarter, nowQ, cache, opts) 
   }
   if (!todo.length) return out;
 
-  console.log(`  Naming private-repo weeks: ${todo.length} quarter(s) to search (~3s per 100 commits).`);
+  // No time estimate here on purpose: the search API's throttling is unpredictable,
+  // so any per-commit rate we quote would be wrong as soon as a cooldown hits.
+  console.log(`  Naming private-repo weeks: ${todo.length} quarter(s) to search.`);
+  console.log('  The search API is rate-limited, so this can take a while. Progress is cached per quarter - safe to stop and resume.');
   let done = 0;
   for (const { q, topUp } of todo) {
     const [from, to] = quarterRange(q);
